@@ -8,7 +8,7 @@ namespace Simulation
     /// SPH-SWE粒子群の生成とシミュレーションを管理する。
     /// 現段階では初期配置とGizmos表示のみを行う。
     /// </summary>
-    public sealed class SphSweSimulation : MonoBehaviour
+    public sealed partial class SphSweSimulation : MonoBehaviour
     {
         [Header("Particle Layout")]
 
@@ -34,8 +34,9 @@ namespace Simulation
 
         [Header("Debug Drawing")]
 
+        [UnityEngine.Serialization.FormerlySerializedAs("drawParticles")]
         [SerializeField]
-        private bool drawParticles = true;
+        private bool particleGizmoDrawingEnabled = true;
 
         [SerializeField, Min(0.001f)]
         private float gizmoRadius = 0.08f;
@@ -44,17 +45,35 @@ namespace Simulation
         private float gizmoHeight;
 
         [SerializeField]
-        private Color fluidParticleColor = new Color(
+        private Color fluidParticleColor = new (
             0.1f,
             0.5f,
             1f,
             1f
         );
+        
+        [SerializeField]
+        private bool densityBasedParticleColoringEnabled = true;
+
+        [SerializeField]
+        private Color lowDensityParticleColor = new (
+            0.1f,
+            0.4f,
+            1f,
+            1f
+        );
+
+        [SerializeField]
+        private Color highDensityParticleColor = new (
+            1f,
+            0.15f,
+            0.05f,
+            1f
+        );
 
         private SphSweParticle[] particles;
         
-        public SphSweParticle[] Particles =>
-            particles ?? System.Array.Empty<SphSweParticle>();
+        public SphSweParticle[] Particles => particles ?? System.Array.Empty<SphSweParticle>();
 
         /// <summary>
         /// 現在生成されている粒子数。
@@ -225,71 +244,5 @@ namespace Simulation
             return new Vector2(positionX, positionZ);
         }
 
-        private void OnDrawGizmos()
-        {
-            if (!drawParticles)
-            {
-                return;
-            }
-
-            Gizmos.color = fluidParticleColor;
-
-            if (particles != null && particles.Length > 0)
-            {
-                DrawGeneratedParticles();
-                return;
-            }
-
-            DrawParticlePreview();
-        }
-
-        /// <summary>
-        /// 実際に生成されている粒子を描画する。
-        /// </summary>
-        private void DrawGeneratedParticles()
-        {
-            if (particles == null || particles.Length == 0)
-            {
-                return;
-            }
-
-            foreach (var particle in particles)
-            {
-                var worldPosition = TransformSimulationToWorldPosition(particle.Position);
-
-                Gizmos.DrawSphere(worldPosition, gizmoRadius);
-            }
-        }
-
-        /// <summary>
-        /// Editモードでは設定値から初期配置をプレビューする。
-        /// </summary>
-        private void DrawParticlePreview()
-        {
-            for (var x = 0; x < particleCountX; x++)
-            {
-                for (var z = 0; z < particleCountZ; z++)
-                {
-                    var position = CalculateInitialPosition(x, z);
-                    var worldPosition = TransformSimulationToWorldPosition(position);
-
-                    Gizmos.DrawSphere(worldPosition, gizmoRadius);
-                }
-            }
-        }
-
-        /// <summary>
-        /// 2次元のシミュレーション座標をUnity座標へ変換する。
-        /// </summary>
-        private Vector3 TransformSimulationToWorldPosition(Vector2 position)
-        {
-            return transform.TransformPoint(
-                new Vector3(
-                    position.x,
-                    gizmoHeight,
-                    position.y
-                )
-            );
-        }
     }
 }
