@@ -37,8 +37,7 @@ namespace Simulation
                 );
             }
 
-            var squaredRadius =
-                effectiveRadius * effectiveRadius;
+            var squaredRadius = effectiveRadius * effectiveRadius;
             
             if (squaredDistance >= squaredRadius)
             {

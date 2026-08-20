@@ -1,4 +1,5 @@
 using Core;
+using Cysharp.Text;
 using UnityEngine;
 
 namespace Simulation
@@ -52,7 +53,8 @@ namespace Simulation
 
         private SphSweParticle[] particles;
         
-        public SphSweParticle[] Particles => particles;
+        public SphSweParticle[] Particles =>
+            particles ?? System.Array.Empty<SphSweParticle>();
 
         /// <summary>
         /// 現在生成されている粒子数。
@@ -77,6 +79,7 @@ namespace Simulation
         private void Initialize()
         {
             GenerateParticles();
+            CalculateDensities();
         }
 
         /// <summary>
@@ -107,10 +110,98 @@ namespace Simulation
                 }
             }
 
-            Debug.Log(
-                $"Generated {ParticleCount} SPH-SWE particles.",
-                this
+            var message = ZString.Format(
+                "Generated {0} SPH-SWE particles.",
+                ParticleCount
             );
+
+            Debug.Log(message, this);
+        }
+        
+        /// <summary>
+        /// 全粒子探索とPoly6カーネルを使用して、
+        /// 各粒子の密度相当量を計算する。
+        /// </summary>
+        [ContextMenu("Calculate Densities")]
+        private void CalculateDensities()
+        {
+            if (particles == null || particles.Length == 0)
+            {
+                Debug.LogWarning("Particles have not been generated.", this);
+                return;
+            }
+
+            for (var i = 0; i < particles.Length; i++)
+            {
+                ref var particle = ref particles[i];
+                var density = 0f;
+
+                foreach (var neighbor in particles)
+                {
+                    var differenceX =
+                        particle.Position.x - neighbor.Position.x;
+
+                    var differenceZ =
+                        particle.Position.y - neighbor.Position.y;
+
+                    var squaredDistance =
+                        differenceX * differenceX
+                        + differenceZ * differenceZ;
+
+                    var kernelValue = SphSweKernel.EvaluatePoly6(
+                        squaredDistance,
+                        particle.EffectiveRadius
+                    );
+
+                    density += neighbor.Mass * kernelValue;
+                }
+
+                particle.Density = density;
+            }
+            
+            LogDensityStatistics();
+        }
+        
+        /// <summary>
+        /// 現在の粒子密度について、最小値、最大値、平均値を表示する。
+        /// </summary>
+        private void LogDensityStatistics()
+        {
+            if (particles == null || particles.Length == 0)
+            {
+                return;
+            }
+
+            var minimumDensity = float.PositiveInfinity;
+            var maximumDensity = float.NegativeInfinity;
+            var totalDensity = 0f;
+
+            foreach (var particle in particles)
+            {
+                minimumDensity = Mathf.Min(
+                    minimumDensity,
+                    particle.Density
+                );
+
+                maximumDensity = Mathf.Max(
+                    maximumDensity,
+                    particle.Density
+                );
+
+                totalDensity += particle.Density;
+            }
+
+            var averageDensity =
+                totalDensity / particles.Length;
+
+            var message = ZString.Format(
+                "Density — Min: {0:F5}, Max: {1:F5}, Average: {2:F5}",
+                minimumDensity,
+                maximumDensity,
+                averageDensity
+            );
+
+            Debug.Log(message, this);
         }
 
         /// <summary>
@@ -143,7 +234,7 @@ namespace Simulation
 
             Gizmos.color = fluidParticleColor;
 
-            if (particles is { Length: > 0 })
+            if (particles != null && particles.Length > 0)
             {
                 DrawGeneratedParticles();
                 return;
@@ -157,6 +248,11 @@ namespace Simulation
         /// </summary>
         private void DrawGeneratedParticles()
         {
+            if (particles == null || particles.Length == 0)
+            {
+                return;
+            }
+
             foreach (var particle in particles)
             {
                 var worldPosition = TransformSimulationToWorldPosition(particle.Position);
