@@ -530,10 +530,13 @@ MonoBehaviour:
   simulationCenter: {x: 0, y: 0}
   particleMass: 1
   effectiveRadius: 0.5
-  drawParticles: 1
+  particleGizmoDrawingEnabled: 1
   gizmoRadius: 0.08
   gizmoHeight: 0
   fluidParticleColor: {r: 0.1, g: 0.5, b: 1, a: 1}
+  densityBasedParticleColoringEnabled: 1
+  lowDensityParticleColor: {r: 0.1, g: 0.4, b: 1, a: 1}
+  highDensityParticleColor: {r: 1, g: 0.15, b: 0.05, a: 1}
 --- !u!4 &734073336
 Transform:
   m_ObjectHideFlags: 0

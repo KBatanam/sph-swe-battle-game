@@ -31,6 +31,12 @@ namespace Simulation
 
         [SerializeField, Min(0.001f)]
         private float effectiveRadius = 0.5f;
+        
+        [SerializeField, Min(0.001f)]
+        private float referenceDensity = 998.29f;
+
+        [SerializeField, Min(0f)]
+        private float gravityAcceleration = 9.81f;
 
         [Header("Debug Drawing")]
 
@@ -70,15 +76,29 @@ namespace Simulation
             0.05f,
             1f
         );
-
-        private SphSweParticle[] particles;
         
-        public SphSweParticle[] Particles => particles ?? System.Array.Empty<SphSweParticle>();
+        [SerializeField]
+        private bool particleAccelerationGizmoDrawingEnabled = true;
+
+        [SerializeField, Min(0f)]
+        private float particleAccelerationGizmoScale = 0.25f;
+
+        [SerializeField]
+        private Color particleAccelerationGizmoColor = new (
+            1f,
+            0.9f,
+            0.1f,
+            1f
+        );
+        
+        private SphSweParticle[] _particles;
+        
+        public SphSweParticle[] Particles => _particles ?? System.Array.Empty<SphSweParticle>();
 
         /// <summary>
         /// 現在生成されている粒子数。
         /// </summary>
-        public int ParticleCount => particles?.Length ?? 0;
+        public int ParticleCount => _particles?.Length ?? 0;
 
         private void Awake()
         {
@@ -93,12 +113,16 @@ namespace Simulation
             particleMass = Mathf.Max(0.0001f, particleMass);
             effectiveRadius = Mathf.Max(0.001f, effectiveRadius);
             gizmoRadius = Mathf.Max(0.001f, gizmoRadius);
+            referenceDensity = Mathf.Max(0.001f, referenceDensity);
+            gravityAcceleration = Mathf.Max(0f, gravityAcceleration);
+            particleAccelerationGizmoScale = Mathf.Max(0f, particleAccelerationGizmoScale);
         }
 
         private void Initialize()
         {
             GenerateParticles();
             CalculateDensities();
+            CalculateFluidDepthGradientAccelerations();
         }
 
         /// <summary>
@@ -108,7 +132,7 @@ namespace Simulation
         public void GenerateParticles()
         {
             var totalParticleCount = particleCountX * particleCountZ;
-            particles = new SphSweParticle[totalParticleCount];
+            _particles = new SphSweParticle[totalParticleCount];
 
             var particleIndex = 0;
 
@@ -118,7 +142,7 @@ namespace Simulation
                 {
                     var position = CalculateInitialPosition(x, z);
 
-                    particles[particleIndex] = new SphSweParticle(
+                    _particles[particleIndex] = new SphSweParticle(
                         position,
                         particleMass,
                         effectiveRadius,
@@ -144,18 +168,18 @@ namespace Simulation
         [ContextMenu("Calculate Densities")]
         private void CalculateDensities()
         {
-            if (particles == null || particles.Length == 0)
+            if (_particles == null || _particles.Length == 0)
             {
                 Debug.LogWarning("Particles have not been generated.", this);
                 return;
             }
 
-            for (var i = 0; i < particles.Length; i++)
+            for (var i = 0; i < _particles.Length; i++)
             {
-                ref var particle = ref particles[i];
+                ref var particle = ref _particles[i];
                 var density = 0f;
 
-                foreach (var neighbor in particles)
+                foreach (var neighbor in _particles)
                 {
                     var differenceX =
                         particle.Position.x - neighbor.Position.x;
@@ -186,7 +210,7 @@ namespace Simulation
         /// </summary>
         private void LogDensityStatistics()
         {
-            if (particles == null || particles.Length == 0)
+            if (_particles == null || _particles.Length == 0)
             {
                 return;
             }
@@ -195,7 +219,7 @@ namespace Simulation
             var maximumDensity = float.NegativeInfinity;
             var totalDensity = 0f;
 
-            foreach (var particle in particles)
+            foreach (var particle in _particles)
             {
                 minimumDensity = Mathf.Min(
                     minimumDensity,
@@ -211,7 +235,7 @@ namespace Simulation
             }
 
             var averageDensity =
-                totalDensity / particles.Length;
+                totalDensity / _particles.Length;
 
             var message = ZString.Format(
                 "Density — Min: {0:F5}, Max: {1:F5}, Average: {2:F5}",
@@ -243,6 +267,6 @@ namespace Simulation
 
             return new Vector2(positionX, positionZ);
         }
-
+        
     }
 }

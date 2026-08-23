@@ -54,5 +54,62 @@ namespace Simulation
                    * radiusDifference
                    * radiusDifference;
         }
+        
+        /// <summary>
+        /// 2次元Spikyカーネルの勾配を計算する。
+        /// </summary>
+        /// <param name="positionDifference">
+        /// 対象粒子から近傍粒子を引いた位置差。
+        /// </param>
+        /// <param name="effectiveRadius">
+        /// カーネルの有効半径。
+        /// </param>
+        public static Vector2 EvaluateSpikyGradient(
+            Vector2 positionDifference,
+            float effectiveRadius)
+        {
+            if (effectiveRadius <= 0f)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(effectiveRadius),
+                    effectiveRadius,
+                    "Effective radius must be greater than zero."
+                );
+            }
+
+            var differenceX = positionDifference.x;
+            var differenceZ = positionDifference.y;
+
+            var squaredDistance = differenceX * differenceX + differenceZ * differenceZ;
+
+            if (squaredDistance <= 0f)
+            {
+                return Vector2.zero;
+            }
+
+            var squaredRadius = effectiveRadius * effectiveRadius;
+
+            if (squaredDistance >= squaredRadius)
+            {
+                return Vector2.zero;
+            }
+
+            var distance = Mathf.Sqrt(squaredDistance);
+            var radiusDifference = effectiveRadius - distance;
+
+            var radiusSquared = effectiveRadius * effectiveRadius;
+            var radiusFourthPower = radiusSquared * radiusSquared;
+            var radiusFifthPower = radiusFourthPower * effectiveRadius;
+
+            var coefficient = -30f / (Mathf.PI * radiusFifthPower);
+
+            var gradientScale =
+                coefficient
+                * radiusDifference
+                * radiusDifference
+                / distance;
+
+            return positionDifference * gradientScale;
+        }
     }
 }

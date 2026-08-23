@@ -1,3 +1,4 @@
+using Core;
 using UnityEngine;
 
 namespace Simulation
@@ -13,7 +14,7 @@ namespace Simulation
 
             Gizmos.color = fluidParticleColor;
 
-            if (particles != null && particles.Length > 0)
+            if (Particles != null && Particles.Length > 0)
             {
                 DrawGeneratedParticles();
                 return;
@@ -27,7 +28,7 @@ namespace Simulation
         /// </summary>
         private void DrawGeneratedParticles()
         {
-            if (particles == null || particles.Length == 0)
+            if (Particles == null || Particles.Length == 0)
             {
                 return;
             }
@@ -37,7 +38,7 @@ namespace Simulation
                 out var maximumDensity
             );
 
-            foreach (var particle in particles)
+            foreach (var particle in Particles)
             {
                 var worldPosition = TransformSimulationToWorldPosition(particle.Position);
 
@@ -56,6 +57,8 @@ namespace Simulation
                 }
                 
                 Gizmos.DrawSphere(worldPosition, gizmoRadius);
+
+                DrawParticleAccelerationGizmo(particle, worldPosition);
             }
         }
 
@@ -69,7 +72,7 @@ namespace Simulation
             minimumDensity = 0f;
             maximumDensity = 0f;
 
-            if (particles == null || particles.Length == 0)
+            if (Particles == null || Particles.Length == 0)
             {
                 return false;
             }
@@ -77,7 +80,7 @@ namespace Simulation
             minimumDensity = float.PositiveInfinity;
             maximumDensity = float.NegativeInfinity;
 
-            foreach (var particle in particles)
+            foreach (var particle in Particles)
             {
                 minimumDensity = Mathf.Min(
                     minimumDensity,
@@ -143,6 +146,37 @@ namespace Simulation
                     position.y
                 )
             );
+        }
+        
+        /// <summary>
+        /// 粒子の加速度をGizmosの線として描画する。
+        /// </summary>
+        private void DrawParticleAccelerationGizmo(SphSweParticle particle, Vector3 particleWorldPosition)
+        {
+            if (!particleAccelerationGizmoDrawingEnabled)
+            {
+                return;
+            }
+
+            var accelerationX = particle.Acceleration.x;
+            var accelerationZ = particle.Acceleration.y;
+
+            var squaredAccelerationMagnitude = accelerationX * accelerationX + accelerationZ * accelerationZ;
+
+            if (squaredAccelerationMagnitude <= 0f)
+            {
+                return;
+            }
+
+            var accelerationEndSimulationPosition =
+                particle.Position + particle.Acceleration * particleAccelerationGizmoScale;
+
+            var accelerationEndWorldPosition = 
+                TransformSimulationToWorldPosition(accelerationEndSimulationPosition);
+
+            Gizmos.color = particleAccelerationGizmoColor;
+
+            Gizmos.DrawLine(particleWorldPosition, accelerationEndWorldPosition);
         }
     }
 }
