@@ -65,9 +65,7 @@ namespace Simulation
         /// <summary>
         /// 現在生成されている粒子から密度の最小値と最大値を計算する。
         /// </summary>
-        private bool TryCalculateParticleDensityRange(
-            out float minimumDensity,
-            out float maximumDensity)
+        private bool TryCalculateParticleDensityRange(out float minimumDensity, out float maximumDensity)
         {
             minimumDensity = 0f;
             maximumDensity = 0f;
@@ -99,10 +97,7 @@ namespace Simulation
         /// <summary>
         /// 粒子の密度をGizmos描画用の色へ変換する。
         /// </summary>
-        private Color CalculateParticleGizmoColor(
-            float particleDensity,
-            float minimumDensity,
-            float maximumDensity)
+        private Color CalculateParticleGizmoColor(float particleDensity, float minimumDensity, float maximumDensity)
         {
             var normalizedDensity = Mathf.InverseLerp(
                 minimumDensity,

@@ -6,9 +6,18 @@ namespace Simulation
     public sealed partial class SphSweSimulation
     {
         /// <summary>
+        /// 全粒子に働く加速度を計算する。
+        /// </summary>
+        [ContextMenu("Calculate Accelerations")]
+        private void CalculateAccelerations()
+        {
+            CalculateFluidDepthGradientAccelerations();
+            AddViscosityAccelerations();
+        }
+
+        /// <summary>
         /// 流体深さの勾配から全流体粒子の加速度を計算する。
         /// </summary>
-        [ContextMenu("Calculate Fluid Depth Gradient Accelerations")]
         private void CalculateFluidDepthGradientAccelerations()
         {
             if (_particles == null || _particles.Length == 0)
@@ -63,6 +72,72 @@ namespace Simulation
 
                 particle.Acceleration =
                     fluidDepthGradientAcceleration;
+            }
+        }
+
+        /// <summary>
+        /// 近傍粒子との速度差から粘性加速度を計算し、現在の加速度へ加算する。
+        /// </summary>
+        private void AddViscosityAccelerations()
+        {
+            if (_particles == null || _particles.Length == 0)
+            {
+                Debug.LogWarning("Particles have not been generated.", this);
+                return;
+            }
+
+            for (var particleIndex = 0; particleIndex < _particles.Length; particleIndex++)
+            {
+                ref var particle = ref _particles[particleIndex];
+
+                if (particle.Type == SphSweParticleType.Boundary)
+                {
+                    continue;
+                }
+
+                if (particle.Density <= 0f)
+                {
+                    continue;
+                }
+
+                var viscosityAcceleration = Vector2.zero;
+                var particleViscosityScale = viscosityCoefficient / particle.Density;
+
+                for (var neighborIndex = 0; neighborIndex < _particles.Length; neighborIndex++)
+                {
+                    if (particleIndex == neighborIndex)
+                    {
+                        continue;
+                    }
+
+                    var neighbor = _particles[neighborIndex];
+
+                    if (neighbor.Density <= 0f)
+                    {
+                        continue;
+                    }
+
+                    var positionDifference = particle.Position - neighbor.Position;
+                    var differenceX = positionDifference.x;
+                    var differenceZ = positionDifference.y;
+                    var squaredDistance = differenceX * differenceX + differenceZ * differenceZ;
+
+                    var viscosityLaplacian = SphSweKernel.EvaluateViscosityLaplacian(
+                        squaredDistance,
+                        particle.EffectiveRadius
+                    );
+
+                    var combinedViscosityLaplacian = viscosityLaplacian * 2f;
+                    var velocityDifference = neighbor.Velocity - particle.Velocity;
+
+                    viscosityAcceleration += particleViscosityScale
+                                             * neighbor.Mass
+                                             * velocityDifference
+                                             / neighbor.Density
+                                             * combinedViscosityLaplacian;
+                }
+
+                particle.Acceleration += viscosityAcceleration;
             }
         }
     }

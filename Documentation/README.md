@@ -20,6 +20,7 @@
 5. [密度推定](05-Density-Estimation.md)
 6. [Spikyカーネル勾配](06-Spiky-Kernel-Gradient.md)
 7. [流体深さ勾配による加速度](07-Fluid-Depth-Gradient-Acceleration.md)
+8. [Viscosityカーネル](08-Viscosity-Kernel.md)
 
 ## 現在の到達点
 
@@ -32,6 +33,8 @@
 - 密度に基づくGizmosの色分けを実装済み
 - Spikyカーネル勾配を実装済み
 - 流体深さ勾配による加速度を実装済み
+- Viscosityカーネルを実装・検証済み
+- 粘性加速度を実装・検証済み
 
 ## 文書更新ルール
 

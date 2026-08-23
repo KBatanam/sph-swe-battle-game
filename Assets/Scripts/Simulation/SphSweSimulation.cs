@@ -37,6 +37,9 @@ namespace Simulation
 
         [SerializeField, Min(0f)]
         private float gravityAcceleration = 9.81f;
+        
+        [SerializeField, Min(0f)]
+        private float viscosityCoefficient = 30f;
 
         [Header("Debug Drawing")]
 
@@ -94,10 +97,6 @@ namespace Simulation
         private SphSweParticle[] _particles;
         
         public SphSweParticle[] Particles => _particles ?? System.Array.Empty<SphSweParticle>();
-
-        /// <summary>
-        /// 現在生成されている粒子数。
-        /// </summary>
         public int ParticleCount => _particles?.Length ?? 0;
 
         private void Awake()
@@ -116,13 +115,14 @@ namespace Simulation
             referenceDensity = Mathf.Max(0.001f, referenceDensity);
             gravityAcceleration = Mathf.Max(0f, gravityAcceleration);
             particleAccelerationGizmoScale = Mathf.Max(0f, particleAccelerationGizmoScale);
+            viscosityCoefficient = Mathf.Max(0f, viscosityCoefficient);
         }
 
         private void Initialize()
         {
             GenerateParticles();
             CalculateDensities();
-            CalculateFluidDepthGradientAccelerations();
+            CalculateAccelerations();
         }
 
         /// <summary>
@@ -197,6 +197,7 @@ namespace Simulation
                     );
 
                     density += neighbor.Mass * kernelValue;
+                    particle.FluidDepth = Mathf.Max(0f, density / referenceDensity);
                 }
 
                 particle.Density = density;
@@ -255,18 +256,10 @@ namespace Simulation
             var width = (particleCountX - 1) * particleSpacing;
             var depth = (particleCountZ - 1) * particleSpacing;
 
-            var positionX =
-                simulationCenter.x
-                - width * 0.5f
-                + x * particleSpacing;
-
-            var positionZ =
-                simulationCenter.y
-                - depth * 0.5f
-                + z * particleSpacing;
+            var positionX = simulationCenter.x - width * 0.5f + x * particleSpacing;
+            var positionZ = simulationCenter.y - depth * 0.5f + z * particleSpacing;
 
             return new Vector2(positionX, positionZ);
         }
-        
     }
 }

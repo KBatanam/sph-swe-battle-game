@@ -111,5 +111,44 @@ namespace Simulation
 
             return positionDifference * gradientScale;
         }
+        
+        /// <summary>
+        /// 2次元Viscosityカーネルのラプラシアンを計算する。
+        /// </summary>
+        public static float EvaluateViscosityLaplacian(float squaredDistance, float effectiveRadius)
+        {
+            if (squaredDistance < 0f)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(squaredDistance),
+                    squaredDistance,
+                    "Squared distance must be greater than or equal to zero."
+                );
+            }
+
+            if (effectiveRadius <= 0f)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(effectiveRadius),
+                    effectiveRadius,
+                    "Effective radius must be greater than zero."
+                );
+            }
+
+            var squaredRadius = effectiveRadius * effectiveRadius;
+
+            if (squaredDistance >= squaredRadius)
+            {
+                return 0f;
+            }
+
+            var distance = Mathf.Sqrt(squaredDistance);
+            var radiusSquared = effectiveRadius * effectiveRadius;
+            var radiusFourthPower = radiusSquared * radiusSquared;
+            var radiusFifthPower = radiusFourthPower * effectiveRadius;
+            var coefficient = 20f / (3f * Mathf.PI * radiusFifthPower);
+
+            return coefficient * (effectiveRadius - distance);
+        }
     }
 }

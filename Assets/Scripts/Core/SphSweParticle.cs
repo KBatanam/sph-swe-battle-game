@@ -41,6 +41,11 @@ namespace Core
         /// </summary>
         public float EffectiveRadius;
         
+        /// <summary>
+        /// 密度相当量から計算された流体深さ。
+        /// </summary>
+        public float FluidDepth;
+        
         public SphSweParticleType Type;
 
         public SphSweParticle(
@@ -52,11 +57,11 @@ namespace Core
             Position = position;
             Velocity = Vector2.zero;
             Acceleration = Vector2.zero;
-
             Density = 0f;
             Mass = mass;
             InitialMass = mass;
             EffectiveRadius = effectiveRadius;
+            FluidDepth = 0f;
             Type = type;
         }
     }
