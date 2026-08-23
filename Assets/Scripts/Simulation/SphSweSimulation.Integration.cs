@@ -20,14 +20,14 @@ namespace Simulation
                 );
             }
 
-            if (_particles == null || _particles.Length == 0)
+            if (particles == null || particles.Length == 0)
             {
                 return;
             }
 
-            for (var particleIndex = 0; particleIndex < _particles.Length; particleIndex++)
+            for (var particleIndex = 0; particleIndex < particles.Length; particleIndex++)
             {
-                ref var particle = ref _particles[particleIndex];
+                ref var particle = ref particles[particleIndex];
 
                 if (particle.Type == SphSweParticleType.Boundary)
                 {
@@ -40,6 +40,7 @@ namespace Simulation
                 LimitParticleVelocity(ref particle, maximumAllowedVelocity);
 
                 particle.Position += particle.Velocity * deltaTime;
+                ClampParticlePositionToSimulationArea(ref particle);
             }
         }
 
@@ -68,6 +69,32 @@ namespace Simulation
             var velocityScale = maximumAllowedVelocity / Mathf.Sqrt(squaredVelocity);
 
             particle.Velocity *= velocityScale;
+        }
+        
+        /// <summary>
+        /// 粒子が数値誤差や強い加速度によって計算領域外へ流出しないように、
+        /// シミュレーション平面上の位置を計算領域内へ制限する。
+        /// この処理は壁との物理的な衝突を再現するものではなく、
+        /// 境界粒子による相互作用を実装するまでの安全制限として使用する。
+        /// </summary>
+        private void ClampParticlePositionToSimulationArea(ref SphSweParticle particle)
+        {
+            var halfSimulationAreaSize = simulationAreaSize * 0.5f;
+            var minimumPosition = simulationCenter - halfSimulationAreaSize;
+            var maximumPosition = simulationCenter + halfSimulationAreaSize;
+
+            particle.Position = new Vector2(
+                Mathf.Clamp(
+                    particle.Position.x,
+                    minimumPosition.x,
+                    maximumPosition.x
+                ),
+                Mathf.Clamp(
+                    particle.Position.y,
+                    minimumPosition.y,
+                    maximumPosition.y
+                )
+            );
         }
     }
 }

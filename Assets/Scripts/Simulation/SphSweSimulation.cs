@@ -40,6 +40,11 @@ namespace Simulation
         
         [SerializeField, Min(0f)]
         private float viscosityCoefficient = 30f;
+        
+        [Header("Simulation Area")]
+
+        [SerializeField]
+        private Vector2 simulationAreaSize = new(5f, 5f);
 
         [Header("Debug Drawing")]
 
@@ -94,10 +99,10 @@ namespace Simulation
             1f
         );
         
-        private SphSweParticle[] _particles;
+        private SphSweParticle[] particles;
         
-        public SphSweParticle[] Particles => _particles ?? System.Array.Empty<SphSweParticle>();
-        public int ParticleCount => _particles?.Length ?? 0;
+        public SphSweParticle[] Particles => particles ?? System.Array.Empty<SphSweParticle>();
+        public int ParticleCount => particles?.Length ?? 0;
 
         private void Awake()
         {
@@ -116,6 +121,12 @@ namespace Simulation
             gravityAcceleration = Mathf.Max(0f, gravityAcceleration);
             particleAccelerationGizmoScale = Mathf.Max(0f, particleAccelerationGizmoScale);
             viscosityCoefficient = Mathf.Max(0f, viscosityCoefficient);
+            simulationAreaSize.x = Mathf.Max(0.001f, simulationAreaSize.x);
+            simulationAreaSize.y = Mathf.Max(0.001f, simulationAreaSize.y);
+            courantNumber = Mathf.Clamp(courantNumber, 0.01f, 1f);
+            maximumSimulationTimeStep = Mathf.Max(0.000001f, maximumSimulationTimeStep);
+            maximumSimulationSubstepCount = Mathf.Max(1, maximumSimulationSubstepCount);
+            maximumAccumulatedSimulationTime = Mathf.Max(maximumSimulationTimeStep, maximumAccumulatedSimulationTime);
         }
 
         private void Initialize()
@@ -123,8 +134,9 @@ namespace Simulation
             GenerateParticles();
             CalculateDensities();
             CalculateAccelerations();
+            LogDensityStatistics();
         }
-
+        
         /// <summary>
         /// Inspectorの設定値を使用して流体粒子を格子状に生成する。
         /// </summary>
@@ -132,7 +144,7 @@ namespace Simulation
         public void GenerateParticles()
         {
             var totalParticleCount = particleCountX * particleCountZ;
-            _particles = new SphSweParticle[totalParticleCount];
+            particles = new SphSweParticle[totalParticleCount];
 
             var particleIndex = 0;
 
@@ -142,7 +154,7 @@ namespace Simulation
                 {
                     var position = CalculateInitialPosition(x, z);
 
-                    _particles[particleIndex] = new SphSweParticle(
+                    particles[particleIndex] = new SphSweParticle(
                         position,
                         particleMass,
                         effectiveRadius,
@@ -168,28 +180,22 @@ namespace Simulation
         [ContextMenu("Calculate Densities")]
         private void CalculateDensities()
         {
-            if (_particles == null || _particles.Length == 0)
+            if (particles == null || particles.Length == 0)
             {
                 Debug.LogWarning("Particles have not been generated.", this);
                 return;
             }
 
-            for (var i = 0; i < _particles.Length; i++)
+            for (var i = 0; i < particles.Length; i++)
             {
-                ref var particle = ref _particles[i];
+                ref var particle = ref particles[i];
                 var density = 0f;
 
-                foreach (var neighbor in _particles)
+                foreach (var neighbor in particles)
                 {
-                    var differenceX =
-                        particle.Position.x - neighbor.Position.x;
-
-                    var differenceZ =
-                        particle.Position.y - neighbor.Position.y;
-
-                    var squaredDistance =
-                        differenceX * differenceX
-                        + differenceZ * differenceZ;
+                    var differenceX = particle.Position.x - neighbor.Position.x;
+                    var differenceZ = particle.Position.y - neighbor.Position.y;
+                    var squaredDistance = differenceX * differenceX + differenceZ * differenceZ;
 
                     var kernelValue = SphSweKernel.EvaluatePoly6(
                         squaredDistance,
@@ -202,16 +208,15 @@ namespace Simulation
                 particle.Density = density;
                 particle.FluidDepth = Mathf.Max(0f, density / referenceDensity);
             }
-            
-            LogDensityStatistics();
         }
         
         /// <summary>
         /// 現在の粒子密度について、最小値、最大値、平均値を表示する。
         /// </summary>
+        [ContextMenu("Log Density Statistics")]
         private void LogDensityStatistics()
         {
-            if (_particles == null || _particles.Length == 0)
+            if (particles == null || particles.Length == 0)
             {
                 return;
             }
@@ -220,23 +225,16 @@ namespace Simulation
             var maximumDensity = float.NegativeInfinity;
             var totalDensity = 0f;
 
-            foreach (var particle in _particles)
+            foreach (var particle in particles)
             {
-                minimumDensity = Mathf.Min(
-                    minimumDensity,
-                    particle.Density
-                );
-
-                maximumDensity = Mathf.Max(
-                    maximumDensity,
-                    particle.Density
-                );
+                minimumDensity = Mathf.Min(minimumDensity, particle.Density);
+                maximumDensity = Mathf.Max(maximumDensity, particle.Density);
 
                 totalDensity += particle.Density;
             }
 
             var averageDensity =
-                totalDensity / _particles.Length;
+                totalDensity / particles.Length;
 
             var message = ZString.Format(
                 "Density — Min: {0:F5}, Max: {1:F5}, Average: {2:F5}",

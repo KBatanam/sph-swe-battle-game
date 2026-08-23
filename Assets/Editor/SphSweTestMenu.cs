@@ -251,6 +251,7 @@ namespace Editor
 
                 VerifySemiImplicitEulerIntegration(simulation, particles);
                 VerifyIntegrationVelocityLimit(simulation, particles);
+                VerifySimulationAreaClamping(simulation, particles);
                 VerifyBoundaryParticleIsNotIntegrated(simulation, particles);
 
                 Debug.Log("SPH-SWE integration tests passed.");
@@ -258,6 +259,159 @@ namespace Editor
             finally
             {
                 Array.Copy(originalParticles, particles, particles.Length);
+            }
+        }
+
+        [MenuItem("Tools/SPH-SWE/Tests/Test Running Simulation Time Step")]
+        private static void TestRunningSimulationTimeStep()
+        {
+            if (!EditorApplication.isPlaying)
+            {
+                throw new InvalidOperationException(
+                    "The time-step test must be run in Play mode."
+                );
+            }
+
+            var simulation = UnityEngine.Object.FindFirstObjectByType<SphSweSimulation>();
+
+            if (simulation == null)
+            {
+                throw new InvalidOperationException(
+                    "SphSweSimulation was not found in the current scene."
+                );
+            }
+
+            var particles = simulation.Particles;
+
+            if (particles.Length == 0)
+            {
+                throw new InvalidOperationException(
+                    "The simulation does not contain any particles."
+                );
+            }
+
+            var originalParticles = (SphSweParticle[])particles.Clone();
+            var simulationExecutionEnabled = GetPrivateBool(
+                simulation,
+                "simulationExecutionEnabled"
+            );
+
+            SetPrivateBool(simulation, "simulationExecutionEnabled", false);
+
+            try
+            {
+                VerifyMaximumTimeStepUpperLimit(simulation, particles);
+                VerifyHighVelocityReducesTimeStep(simulation, particles);
+                VerifyHighFluidDepthReducesTimeStep(simulation, particles);
+                VerifyBoundaryParticlesDoNotAffectTimeStep(simulation, particles);
+
+                Debug.Log("SPH-SWE time-step tests passed.");
+            }
+            finally
+            {
+                Array.Copy(originalParticles, particles, particles.Length);
+                SetPrivateBool(
+                    simulation,
+                    "simulationExecutionEnabled",
+                    simulationExecutionEnabled
+                );
+            }
+        }
+
+        private static void VerifyMaximumTimeStepUpperLimit(
+            SphSweSimulation simulation,
+            SphSweParticle[] particles)
+        {
+            SetAllParticlesToBoundary(particles);
+
+            ref var particle = ref particles[0];
+            particle.Type = SphSweParticleType.Fluid;
+            particle.Velocity = Vector2.zero;
+            particle.FluidDepth = 0f;
+
+            var actualTimeStep = InvokeCalculateMaximumStableTimeStep(simulation);
+            var expectedTimeStep = GetPrivateFloat(simulation, "maximumSimulationTimeStep");
+
+            VerifyFloatApproximatelyEqual(
+                actualTimeStep,
+                expectedTimeStep,
+                "The maximum simulation time-step upper limit is incorrect."
+            );
+        }
+
+        private static void VerifyHighVelocityReducesTimeStep(
+            SphSweSimulation simulation,
+            SphSweParticle[] particles)
+        {
+            SetAllParticlesToBoundary(particles);
+
+            ref var particle = ref particles[0];
+            particle.Type = SphSweParticleType.Fluid;
+            particle.Velocity = new Vector2(1000f, 0f);
+            particle.FluidDepth = 0f;
+
+            var courantNumber = GetPrivateFloat(simulation, "courantNumber");
+            var expectedTimeStep = courantNumber * particle.EffectiveRadius / 1000f;
+            var actualTimeStep = InvokeCalculateMaximumStableTimeStep(simulation);
+
+            VerifyFloatApproximatelyEqual(
+                actualTimeStep,
+                expectedTimeStep,
+                "A high particle velocity did not reduce the CFL time step correctly."
+            );
+        }
+
+        private static void VerifyHighFluidDepthReducesTimeStep(
+            SphSweSimulation simulation,
+            SphSweParticle[] particles)
+        {
+            SetAllParticlesToBoundary(particles);
+
+            ref var particle = ref particles[0];
+            particle.Type = SphSweParticleType.Fluid;
+            particle.Velocity = Vector2.zero;
+            particle.FluidDepth = 10000f;
+
+            var courantNumber = GetPrivateFloat(simulation, "courantNumber");
+            var gravityAcceleration = GetPrivateFloat(simulation, "gravityAcceleration");
+            var shallowWaterWaveSpeed = Mathf.Sqrt(gravityAcceleration * particle.FluidDepth);
+            var expectedTimeStep = courantNumber * particle.EffectiveRadius / shallowWaterWaveSpeed;
+            var actualTimeStep = InvokeCalculateMaximumStableTimeStep(simulation);
+
+            VerifyFloatApproximatelyEqual(
+                actualTimeStep,
+                expectedTimeStep,
+                "A high fluid depth did not reduce the CFL time step correctly."
+            );
+        }
+
+        private static void VerifyBoundaryParticlesDoNotAffectTimeStep(
+            SphSweSimulation simulation,
+            SphSweParticle[] particles)
+        {
+            SetAllParticlesToBoundary(particles);
+
+            foreach (ref var particle in particles.AsSpan())
+            {
+                particle.Velocity = new Vector2(1000f, 1000f);
+                particle.FluidDepth = 10000f;
+            }
+
+            var actualTimeStep = InvokeCalculateMaximumStableTimeStep(simulation);
+            var expectedTimeStep = GetPrivateFloat(simulation, "maximumSimulationTimeStep");
+
+            VerifyFloatApproximatelyEqual(
+                actualTimeStep,
+                expectedTimeStep,
+                "Boundary particles incorrectly affected the CFL time step."
+            );
+        }
+
+        private static void SetAllParticlesToBoundary(SphSweParticle[] particles)
+        {
+            foreach (ref var particle in particles.AsSpan())
+            {
+                particle.Type = SphSweParticleType.Boundary;
             }
         }
 
@@ -269,7 +423,7 @@ namespace Editor
 
             ref var particle = ref particles[0];
             particle.Type = SphSweParticleType.Fluid;
-            particle.Position = new Vector2(1f, 2f);
+            particle.Position = Vector2.zero;
             particle.Velocity = new Vector2(2f, 3f);
             particle.Acceleration = new Vector2(4f, -2f);
             particle.FluidDepth = 100f;
@@ -283,7 +437,7 @@ namespace Editor
             );
             VerifyVectorApproximatelyEqual(
                 particle.Position,
-                new Vector2(1.75f, 2.625f),
+                new Vector2(0.75f, 0.625f),
                 "The position was not updated using the new velocity."
             );
 
@@ -345,6 +499,60 @@ namespace Editor
                 originalVelocity,
                 "A boundary particle velocity was changed by integration."
             );
+        }
+
+        private static void VerifySimulationAreaClamping(
+            SphSweSimulation simulation,
+            SphSweParticle[] particles)
+        {
+            var simulationCenter = GetPrivateVector2(simulation, "simulationCenter");
+            var simulationAreaSize = GetPrivateVector2(simulation, "simulationAreaSize");
+            var halfSimulationAreaSize = simulationAreaSize * 0.5f;
+            var minimumPosition = simulationCenter - halfSimulationAreaSize;
+            var maximumPosition = simulationCenter + halfSimulationAreaSize;
+
+            VerifyClampedPosition(
+                simulation,
+                particles,
+                minimumPosition - Vector2.one,
+                minimumPosition
+            );
+            VerifyClampedPosition(
+                simulation,
+                particles,
+                maximumPosition + Vector2.one,
+                maximumPosition
+            );
+            VerifyClampedPosition(
+                simulation,
+                particles,
+                simulationCenter,
+                simulationCenter
+            );
+        }
+
+        private static void VerifyClampedPosition(
+            SphSweSimulation simulation,
+            SphSweParticle[] particles,
+            Vector2 inputPosition,
+            Vector2 expectedPosition)
+        {
+            ref var particle = ref particles[0];
+            particle.Type = SphSweParticleType.Fluid;
+            particle.Position = inputPosition;
+            particle.Velocity = Vector2.zero;
+            particle.Acceleration = Vector2.zero;
+            particle.FluidDepth = 0f;
+
+            InvokeIntegrateParticles(simulation, 0.1f);
+
+            VerifyVectorApproximatelyEqual(
+                particle.Position,
+                expectedPosition,
+                "The particle position was not clamped to the simulation area."
+            );
+
+            particle.Type = SphSweParticleType.Boundary;
         }
 
         private static int FindParticleClosestToCenter(Core.SphSweParticle[] particles)
@@ -417,6 +625,25 @@ namespace Editor
             integrateParticlesMethod.Invoke(simulation, new object[] { deltaTime });
         }
 
+        private static float InvokeCalculateMaximumStableTimeStep(
+            SphSweSimulation simulation)
+        {
+            var method = typeof(SphSweSimulation).GetMethod(
+                "CalculateMaximumStableTimeStep",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+
+            if (method == null)
+            {
+                throw new MissingMethodException(
+                    nameof(SphSweSimulation),
+                    "CalculateMaximumStableTimeStep"
+                );
+            }
+
+            return (float)method.Invoke(simulation, null);
+        }
+
         private static float GetPrivateFloat(
             SphSweSimulation simulation,
             string fieldName)
@@ -432,6 +659,58 @@ namespace Editor
             }
 
             return (float)field.GetValue(simulation);
+        }
+
+        private static Vector2 GetPrivateVector2(
+            SphSweSimulation simulation,
+            string fieldName)
+        {
+            var field = typeof(SphSweSimulation).GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+
+            if (field == null)
+            {
+                throw new MissingFieldException(nameof(SphSweSimulation), fieldName);
+            }
+
+            return (Vector2)field.GetValue(simulation);
+        }
+
+        private static bool GetPrivateBool(
+            SphSweSimulation simulation,
+            string fieldName)
+        {
+            var field = typeof(SphSweSimulation).GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+
+            if (field == null)
+            {
+                throw new MissingFieldException(nameof(SphSweSimulation), fieldName);
+            }
+
+            return (bool)field.GetValue(simulation);
+        }
+
+        private static void SetPrivateBool(
+            SphSweSimulation simulation,
+            string fieldName,
+            bool value)
+        {
+            var field = typeof(SphSweSimulation).GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+
+            if (field == null)
+            {
+                throw new MissingFieldException(nameof(SphSweSimulation), fieldName);
+            }
+
+            field.SetValue(simulation, value);
         }
 
         private static void VerifyInvalidEffectiveRadiusThrowsException()

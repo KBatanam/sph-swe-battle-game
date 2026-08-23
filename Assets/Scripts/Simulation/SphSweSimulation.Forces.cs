@@ -20,7 +20,7 @@ namespace Simulation
         /// </summary>
         private void CalculateFluidDepthGradientAccelerations()
         {
-            if (_particles == null || _particles.Length == 0)
+            if (particles == null || particles.Length == 0)
             {
                 Debug.LogWarning("Particles have not been generated.", this);
                 return;
@@ -29,9 +29,9 @@ namespace Simulation
             var fluidDepthGradientAccelerationScale =
                 -gravityAcceleration / referenceDensity;
 
-            for (var particleIndex = 0; particleIndex < _particles.Length; particleIndex++)
+            for (var particleIndex = 0; particleIndex < particles.Length; particleIndex++)
             {
-                ref var particle = ref _particles[particleIndex];
+                ref var particle = ref particles[particleIndex];
 
                 if (particle.Type == SphSweParticleType.Boundary)
                 {
@@ -41,14 +41,14 @@ namespace Simulation
 
                 var fluidDepthGradientAcceleration = Vector2.zero;
 
-                for (var neighborIndex = 0; neighborIndex < _particles.Length; neighborIndex++)
+                for (var neighborIndex = 0; neighborIndex < particles.Length; neighborIndex++)
                 {
                     if (particleIndex == neighborIndex)
                     {
                         continue;
                     }
 
-                    var neighbor = _particles[neighborIndex];
+                    var neighbor = particles[neighborIndex];
 
                     var positionDifference = particle.Position - neighbor.Position;
 
@@ -71,15 +71,15 @@ namespace Simulation
         /// </summary>
         private void AddViscosityAccelerations()
         {
-            if (_particles == null || _particles.Length == 0)
+            if (particles == null || particles.Length == 0)
             {
                 Debug.LogWarning("Particles have not been generated.", this);
                 return;
             }
 
-            for (var particleIndex = 0; particleIndex < _particles.Length; particleIndex++)
+            for (var particleIndex = 0; particleIndex < particles.Length; particleIndex++)
             {
-                ref var particle = ref _particles[particleIndex];
+                ref var particle = ref particles[particleIndex];
 
                 if (particle.Type == SphSweParticleType.Boundary)
                 {
@@ -94,14 +94,14 @@ namespace Simulation
                 var viscosityAcceleration = Vector2.zero;
                 var particleViscosityScale = viscosityCoefficient / particle.Density;
 
-                for (var neighborIndex = 0; neighborIndex < _particles.Length; neighborIndex++)
+                for (var neighborIndex = 0; neighborIndex < particles.Length; neighborIndex++)
                 {
                     if (particleIndex == neighborIndex)
                     {
                         continue;
                     }
 
-                    var neighbor = _particles[neighborIndex];
+                    var neighbor = particles[neighborIndex];
 
                     if (neighbor.Density <= 0f)
                     {

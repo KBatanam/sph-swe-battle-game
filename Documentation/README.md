@@ -21,6 +21,7 @@
 6. [Spikyカーネル勾配](06-Spiky-Kernel-Gradient.md)
 7. [流体深さ勾配による加速度](07-Fluid-Depth-Gradient-Acceleration.md)
 8. [Viscosityカーネル](08-Viscosity-Kernel.md)
+9. [時間積分とシミュレーション領域](09-Time-Integration-And-Simulation-Area.md)
 
 ## 現在の到達点
 
@@ -35,6 +36,8 @@
 - 流体深さ勾配による加速度を実装済み
 - Viscosityカーネルを実装・検証済み
 - 粘性加速度を実装・検証済み
+- 半陰的オイラー法による時間積分を実装・検証済み
+- シミュレーション領域と初期流体領域を分離する設計方針を決定
 
 ## 文書更新ルール
 
