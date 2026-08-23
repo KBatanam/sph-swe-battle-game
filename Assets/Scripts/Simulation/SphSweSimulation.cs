@@ -197,10 +197,10 @@ namespace Simulation
                     );
 
                     density += neighbor.Mass * kernelValue;
-                    particle.FluidDepth = Mathf.Max(0f, density / referenceDensity);
                 }
 
                 particle.Density = density;
+                particle.FluidDepth = Mathf.Max(0f, density / referenceDensity);
             }
             
             LogDensityStatistics();

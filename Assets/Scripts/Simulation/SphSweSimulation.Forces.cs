@@ -29,9 +29,7 @@ namespace Simulation
             var fluidDepthGradientAccelerationScale =
                 -gravityAcceleration / referenceDensity;
 
-            for (var particleIndex = 0;
-                 particleIndex < _particles.Length;
-                 particleIndex++)
+            for (var particleIndex = 0; particleIndex < _particles.Length; particleIndex++)
             {
                 ref var particle = ref _particles[particleIndex];
 
@@ -43,9 +41,7 @@ namespace Simulation
 
                 var fluidDepthGradientAcceleration = Vector2.zero;
 
-                for (var neighborIndex = 0;
-                     neighborIndex < _particles.Length;
-                     neighborIndex++)
+                for (var neighborIndex = 0; neighborIndex < _particles.Length; neighborIndex++)
                 {
                     if (particleIndex == neighborIndex)
                     {
@@ -57,17 +53,12 @@ namespace Simulation
                     var positionDifference = particle.Position - neighbor.Position;
 
                     var spikyGradient =
-                        SphSweKernel.EvaluateSpikyGradient(
-                            positionDifference,
-                            particle.EffectiveRadius
-                        );
+                        SphSweKernel.EvaluateSpikyGradient(positionDifference, particle.EffectiveRadius);
 
                     var combinedSpikyGradient = spikyGradient * 2f;
 
                     fluidDepthGradientAcceleration +=
-                        fluidDepthGradientAccelerationScale
-                        * neighbor.Mass
-                        * combinedSpikyGradient;
+                        fluidDepthGradientAccelerationScale * neighbor.Mass * combinedSpikyGradient;
                 }
 
                 particle.Acceleration =
