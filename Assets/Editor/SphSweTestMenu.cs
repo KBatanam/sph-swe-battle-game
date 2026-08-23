@@ -59,9 +59,17 @@ namespace Editor
 
             var totalAcceleration = Vector2.zero;
             var acceleratedParticleCount = 0;
+            var fluidParticleCount = 0;
 
             foreach (var particle in particles)
             {
+                if (particle.Type != SphSweParticleType.Fluid)
+                {
+                    continue;
+                }
+
+                fluidParticleCount++;
+
                 VerifyFiniteVector(
                     particle.Acceleration,
                     "A particle acceleration contains NaN or Infinity."
@@ -93,9 +101,18 @@ namespace Editor
                 "The total acceleration of the symmetric particle grid is not zero."
             );
 
+            var minimumCornerParticleIndex = FindFluidParticleAtPositionExtreme(
+                particles,
+                findMaximumPosition: false
+            );
+            var maximumCornerParticleIndex = FindFluidParticleAtPositionExtreme(
+                particles,
+                findMaximumPosition: true
+            );
+
             var oppositeCornerAccelerationSum =
-                particles[0].Acceleration
-                + particles[particles.Length - 1].Acceleration;
+                particles[minimumCornerParticleIndex].Acceleration
+                + particles[maximumCornerParticleIndex].Acceleration;
 
             VerifyVectorApproximatelyEqual(
                 oppositeCornerAccelerationSum,
@@ -105,8 +122,51 @@ namespace Editor
 
             Debug.Log(
                 $"Fluid depth gradient acceleration test passed. "
-                + $"Accelerated particles: {acceleratedParticleCount}/{particles.Length}."
+                + $"Accelerated particles: {acceleratedParticleCount}/{fluidParticleCount}."
             );
+        }
+
+        private static int FindFluidParticleAtPositionExtreme(
+            SphSweParticle[] particles,
+            bool findMaximumPosition)
+        {
+            var selectedParticleIndex = -1;
+            var selectedPositionSum = findMaximumPosition
+                ? float.NegativeInfinity
+                : float.PositiveInfinity;
+
+            for (var particleIndex = 0; particleIndex < particles.Length; particleIndex++)
+            {
+                if (particles[particleIndex].Type != SphSweParticleType.Fluid)
+                {
+                    continue;
+                }
+
+                var positionSum =
+                    particles[particleIndex].Position.x
+                    + particles[particleIndex].Position.y;
+
+                var shouldSelect = findMaximumPosition
+                    ? positionSum > selectedPositionSum
+                    : positionSum < selectedPositionSum;
+
+                if (!shouldSelect)
+                {
+                    continue;
+                }
+
+                selectedParticleIndex = particleIndex;
+                selectedPositionSum = positionSum;
+            }
+
+            if (selectedParticleIndex < 0)
+            {
+                throw new InvalidOperationException(
+                    "The simulation does not contain any fluid particles."
+                );
+            }
+
+            return selectedParticleIndex;
         }
 
         [MenuItem("Tools/SPH-SWE/Tests/Test Running Simulation Viscosity")]
@@ -314,6 +374,213 @@ namespace Editor
                     simulation,
                     "simulationExecutionEnabled",
                     simulationExecutionEnabled
+                );
+            }
+        }
+
+        [MenuItem("Tools/SPH-SWE/Tests/Test Running Simulation Boundaries")]
+        private static void TestRunningSimulationBoundaries()
+        {
+            if (!EditorApplication.isPlaying)
+            {
+                throw new InvalidOperationException(
+                    "The boundary-particle test must be run in Play mode."
+                );
+            }
+
+            var simulation = UnityEngine.Object.FindFirstObjectByType<SphSweSimulation>();
+
+            if (simulation == null)
+            {
+                throw new InvalidOperationException(
+                    "SphSweSimulation was not found in the current scene."
+                );
+            }
+
+            if (!GetPrivateBool(simulation, "boundaryParticleGenerationEnabled"))
+            {
+                throw new InvalidOperationException(
+                    "Boundary particle generation is disabled."
+                );
+            }
+
+            var particles = simulation.Particles;
+            var originalParticles = (SphSweParticle[])particles.Clone();
+            var simulationExecutionEnabled = GetPrivateBool(
+                simulation,
+                "simulationExecutionEnabled"
+            );
+
+            SetPrivateBool(simulation, "simulationExecutionEnabled", false);
+
+            try
+            {
+                VerifyBoundaryParticleCount(simulation, particles);
+                VerifyBoundaryParticlePositions(simulation, particles);
+                VerifyBoundaryParticlePositionsAreUnique(particles);
+                VerifyBoundaryParticlesRemainFixed(simulation, particles);
+
+                Debug.Log("SPH-SWE boundary-particle tests passed.");
+            }
+            finally
+            {
+                Array.Copy(originalParticles, particles, particles.Length);
+                SetPrivateBool(
+                    simulation,
+                    "simulationExecutionEnabled",
+                    simulationExecutionEnabled
+                );
+            }
+        }
+
+        private static void VerifyBoundaryParticleCount(
+            SphSweSimulation simulation,
+            SphSweParticle[] particles)
+        {
+            var particleCountX = GetPrivateInt(simulation, "particleCountX");
+            var particleCountZ = GetPrivateInt(simulation, "particleCountZ");
+            var particleSpacing = GetPrivateFloat(simulation, "particleSpacing");
+            var boundaryLayerCount = GetPrivateInt(simulation, "boundaryParticleLayerCount");
+            var spacingScale = GetPrivateFloat(simulation, "boundaryParticleSpacingScale");
+            var simulationAreaSize = GetPrivateVector2(simulation, "simulationAreaSize");
+            var boundarySpacing = particleSpacing * spacingScale;
+            var expectedBoundaryParticleCount = 0;
+
+            for (var layerIndex = 0; layerIndex < boundaryLayerCount; layerIndex++)
+            {
+                var boundaryOffset = particleSpacing * (layerIndex + 0.5f);
+                var boundaryWidth = simulationAreaSize.x + 2f * boundaryOffset;
+                var boundaryDepth = simulationAreaSize.y + 2f * boundaryOffset;
+                var particleCountAlongX = Mathf.CeilToInt(boundaryWidth / boundarySpacing) + 1;
+                var particleCountAlongZ = Mathf.CeilToInt(boundaryDepth / boundarySpacing) + 1;
+
+                expectedBoundaryParticleCount +=
+                    particleCountAlongX * 2
+                    + Mathf.Max(0, particleCountAlongZ - 2) * 2;
+            }
+
+            var actualFluidParticleCount = 0;
+            var actualBoundaryParticleCount = 0;
+
+            foreach (var particle in particles)
+            {
+                if (particle.Type == SphSweParticleType.Fluid)
+                {
+                    actualFluidParticleCount++;
+                }
+                else if (particle.Type == SphSweParticleType.Boundary)
+                {
+                    actualBoundaryParticleCount++;
+                }
+            }
+
+            if (actualFluidParticleCount != particleCountX * particleCountZ)
+            {
+                throw new InvalidOperationException(
+                    "The generated fluid-particle count is incorrect."
+                );
+            }
+
+            if (actualBoundaryParticleCount != expectedBoundaryParticleCount)
+            {
+                throw new InvalidOperationException(
+                    $"The generated boundary-particle count is incorrect. "
+                    + $"Expected {expectedBoundaryParticleCount}, "
+                    + $"but received {actualBoundaryParticleCount}."
+                );
+            }
+        }
+
+        private static void VerifyBoundaryParticlePositions(
+            SphSweSimulation simulation,
+            SphSweParticle[] particles)
+        {
+            var simulationCenter = GetPrivateVector2(simulation, "simulationCenter");
+            var simulationAreaSize = GetPrivateVector2(simulation, "simulationAreaSize");
+            var minimumPosition = simulationCenter - simulationAreaSize * 0.5f;
+            var maximumPosition = simulationCenter + simulationAreaSize * 0.5f;
+
+            foreach (var particle in particles)
+            {
+                if (particle.Type != SphSweParticleType.Boundary)
+                {
+                    continue;
+                }
+
+                var outsideSimulationArea =
+                    particle.Position.x < minimumPosition.x
+                    || particle.Position.x > maximumPosition.x
+                    || particle.Position.y < minimumPosition.y
+                    || particle.Position.y > maximumPosition.y;
+
+                if (!outsideSimulationArea)
+                {
+                    throw new InvalidOperationException(
+                        "A boundary particle was generated inside the simulation area."
+                    );
+                }
+            }
+        }
+
+        private static void VerifyBoundaryParticlePositionsAreUnique(
+            SphSweParticle[] particles)
+        {
+            for (var firstIndex = 0; firstIndex < particles.Length; firstIndex++)
+            {
+                if (particles[firstIndex].Type != SphSweParticleType.Boundary)
+                {
+                    continue;
+                }
+
+                for (var secondIndex = firstIndex + 1; secondIndex < particles.Length; secondIndex++)
+                {
+                    if (particles[secondIndex].Type != SphSweParticleType.Boundary)
+                    {
+                        continue;
+                    }
+
+                    var difference =
+                        particles[firstIndex].Position
+                        - particles[secondIndex].Position;
+
+                    var squaredDistance =
+                        difference.x * difference.x
+                        + difference.y * difference.y;
+
+                    if (squaredDistance <= VectorComparisonTolerance * VectorComparisonTolerance)
+                    {
+                        throw new InvalidOperationException(
+                            "Duplicate boundary-particle positions were generated."
+                        );
+                    }
+                }
+            }
+        }
+
+        private static void VerifyBoundaryParticlesRemainFixed(
+            SphSweSimulation simulation,
+            SphSweParticle[] particles)
+        {
+            var positionsBeforeIntegration = new Vector2[particles.Length];
+
+            for (var particleIndex = 0; particleIndex < particles.Length; particleIndex++)
+            {
+                positionsBeforeIntegration[particleIndex] = particles[particleIndex].Position;
+            }
+
+            InvokeIntegrateParticles(simulation, 0.002f);
+
+            for (var particleIndex = 0; particleIndex < particles.Length; particleIndex++)
+            {
+                if (particles[particleIndex].Type != SphSweParticleType.Boundary)
+                {
+                    continue;
+                }
+
+                VerifyVectorApproximatelyEqual(
+                    particles[particleIndex].Position,
+                    positionsBeforeIntegration[particleIndex],
+                    "A boundary particle moved during integration."
                 );
             }
         }
@@ -693,6 +960,23 @@ namespace Editor
             }
 
             return (bool)field.GetValue(simulation);
+        }
+
+        private static int GetPrivateInt(
+            SphSweSimulation simulation,
+            string fieldName)
+        {
+            var field = typeof(SphSweSimulation).GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+
+            if (field == null)
+            {
+                throw new MissingFieldException(nameof(SphSweSimulation), fieldName);
+            }
+
+            return (int)field.GetValue(simulation);
         }
 
         private static void SetPrivateBool(

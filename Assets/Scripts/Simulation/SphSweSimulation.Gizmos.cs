@@ -41,6 +41,13 @@ namespace Simulation
             foreach (var particle in Particles)
             {
                 var worldPosition = TransformSimulationToWorldPosition(particle.Position);
+                
+                if (particle.Type == SphSweParticleType.Boundary)
+                {
+                    Gizmos.color = boundaryParticleColor;
+                    Gizmos.DrawSphere(worldPosition, gizmoRadius);
+                    continue;
+                }
 
                 if (densityBasedParticleColoringEnabled
                     && particleDensityRangeExists)

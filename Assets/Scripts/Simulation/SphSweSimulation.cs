@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Core;
 using Cysharp.Text;
 using UnityEngine;
@@ -40,6 +41,25 @@ namespace Simulation
         
         [SerializeField, Min(0f)]
         private float viscosityCoefficient = 30f;
+        
+        [Header("Boundary Particles")]
+
+        [SerializeField]
+        private bool boundaryParticleGenerationEnabled = true;
+
+        [SerializeField, Min(1)]
+        private int boundaryParticleLayerCount = 3;
+
+        [SerializeField, Range(0.1f, 1f)]
+        private float boundaryParticleSpacingScale = 0.95f;
+
+        [SerializeField]
+        private Color boundaryParticleColor = new(
+            0.2f,
+            0.2f,
+            0.2f,
+            1f
+        );
         
         [Header("Simulation Area")]
 
@@ -127,6 +147,8 @@ namespace Simulation
             maximumSimulationTimeStep = Mathf.Max(0.000001f, maximumSimulationTimeStep);
             maximumSimulationSubstepCount = Mathf.Max(1, maximumSimulationSubstepCount);
             maximumAccumulatedSimulationTime = Mathf.Max(maximumSimulationTimeStep, maximumAccumulatedSimulationTime);
+            boundaryParticleLayerCount = Mathf.Max(1, boundaryParticleLayerCount);
+            boundaryParticleSpacingScale = Mathf.Clamp(boundaryParticleSpacingScale, 0.1f, 1f);
         }
 
         private void Initialize()
@@ -143,27 +165,26 @@ namespace Simulation
         [ContextMenu("Generate Particles")]
         public void GenerateParticles()
         {
-            var totalParticleCount = particleCountX * particleCountZ;
-            particles = new SphSweParticle[totalParticleCount];
-
-            var particleIndex = 0;
+            var fluidParticleCount = particleCountX * particleCountZ;
+            var generatedParticles = new List<SphSweParticle>(fluidParticleCount);
 
             for (var x = 0; x < particleCountX; x++)
             {
                 for (var z = 0; z < particleCountZ; z++)
                 {
-                    var position = CalculateInitialPosition(x, z);
-
-                    particles[particleIndex] = new SphSweParticle(
-                        position,
-                        particleMass,
-                        effectiveRadius,
-                        SphSweParticleType.Fluid
+                    generatedParticles.Add(
+                        new SphSweParticle(
+                            CalculateInitialPosition(x, z),
+                            particleMass,
+                            effectiveRadius,
+                            SphSweParticleType.Fluid
+                        )
                     );
-
-                    particleIndex++;
                 }
             }
+
+            AddBoundaryParticles(generatedParticles);
+            particles = generatedParticles.ToArray();
 
             var message = ZString.Format(
                 "Generated {0} SPH-SWE particles.",
