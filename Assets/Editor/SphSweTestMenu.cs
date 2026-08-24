@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using Core;
 using Simulation;
@@ -26,6 +27,250 @@ namespace Editor
             VerifyViscosityLaplacianAtBoundary();
 
             Debug.Log("All SPH-SWE kernel tests passed.");
+        }
+
+        [MenuItem("Tools/SPH-SWE/Tests/Run Spatial Grid Tests")]
+        private static void RunSpatialGridTests()
+        {
+            var particles = new[]
+            {
+                CreateSpatialGridTestParticle(new Vector2(0f, 0f), 0.5f),
+                CreateSpatialGridTestParticle(new Vector2(0.5f, 0f), 0.5f),
+                CreateSpatialGridTestParticle(new Vector2(0.5001f, 0f), 0.75f),
+                CreateSpatialGridTestParticle(new Vector2(-0.1f, -0.1f), 0.25f),
+                CreateSpatialGridTestParticle(new Vector2(-0.5f, 0f), 1.1f),
+                CreateSpatialGridTestParticle(new Vector2(1.2f, -0.8f), 0.6f)
+            };
+
+            var spatialGrid = new SphSweSpatialGrid();
+            var actualNeighborParticleIndices = new List<int>();
+            var expectedNeighborParticleIndices = new List<int>();
+
+            spatialGrid.Rebuild(particles, 0.5f);
+
+            for (var particleIndex = 0; particleIndex < particles.Length; particleIndex++)
+            {
+                var particle = particles[particleIndex];
+
+                spatialGrid.CollectNeighborParticleIndices(
+                    particle.Position,
+                    particle.EffectiveRadius,
+                    actualNeighborParticleIndices
+                );
+
+                CollectNeighborParticleIndicesByDirectSearch(
+                    particles,
+                    particle.Position,
+                    particle.EffectiveRadius,
+                    expectedNeighborParticleIndices
+                );
+
+                VerifyParticleIndexListsEqual(
+                    actualNeighborParticleIndices,
+                    expectedNeighborParticleIndices,
+                    particleIndex
+                );
+            }
+
+            VerifySpatialGridRebuildRemovesOldParticles(
+                spatialGrid,
+                actualNeighborParticleIndices
+            );
+
+            Debug.Log("All SPH-SWE spatial-grid tests passed.");
+        }
+
+        [MenuItem("Tools/SPH-SWE/Tests/Compare Running Simulation Density Methods")]
+        private static void CompareRunningSimulationDensityMethods()
+        {
+            if (!EditorApplication.isPlaying)
+            {
+                throw new InvalidOperationException(
+                    "The density comparison must be run in Play mode."
+                );
+            }
+
+            var simulation = UnityEngine.Object.FindFirstObjectByType<SphSweSimulation>();
+
+            if (simulation == null)
+            {
+                throw new InvalidOperationException(
+                    "SphSweSimulation was not found in the current scene."
+                );
+            }
+
+            var particles = simulation.Particles;
+
+            if (particles.Length == 0)
+            {
+                throw new InvalidOperationException(
+                    "The simulation does not contain any particles."
+                );
+            }
+
+            var originalParticles = (SphSweParticle[])particles.Clone();
+            var simulationExecutionEnabled = GetPrivateBool(
+                simulation,
+                "simulationExecutionEnabled"
+            );
+
+            SetPrivateBool(simulation, "simulationExecutionEnabled", false);
+
+            try
+            {
+                InvokePrivateParameterlessMethod(simulation, "CalculateDensities");
+
+                var directSearchDensities = new float[particles.Length];
+                var directSearchFluidDepths = new float[particles.Length];
+
+                for (var particleIndex = 0; particleIndex < particles.Length; particleIndex++)
+                {
+                    directSearchDensities[particleIndex] = particles[particleIndex].Density;
+                    directSearchFluidDepths[particleIndex] = particles[particleIndex].FluidDepth;
+                }
+
+                InvokePrivateParameterlessMethod(
+                    simulation,
+                    "CalculateDensitiesUsingSpatialGrid"
+                );
+
+                for (var particleIndex = 0; particleIndex < particles.Length; particleIndex++)
+                {
+                    VerifyFloatApproximatelyEqual(
+                        particles[particleIndex].Density,
+                        directSearchDensities[particleIndex],
+                        $"The spatial-grid density differs for particle {particleIndex}."
+                    );
+                    VerifyFloatApproximatelyEqual(
+                        particles[particleIndex].FluidDepth,
+                        directSearchFluidDepths[particleIndex],
+                        $"The spatial-grid fluid depth differs for particle {particleIndex}."
+                    );
+                }
+
+                Debug.Log(
+                    $"SPH-SWE density methods matched for all {particles.Length} particles."
+                );
+            }
+            finally
+            {
+                Array.Copy(originalParticles, particles, particles.Length);
+                SetPrivateBool(
+                    simulation,
+                    "simulationExecutionEnabled",
+                    simulationExecutionEnabled
+                );
+            }
+        }
+
+        private static void InvokePrivateParameterlessMethod(
+            SphSweSimulation simulation,
+            string methodName)
+        {
+            var method = typeof(SphSweSimulation).GetMethod(
+                methodName,
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+
+            if (method == null)
+            {
+                throw new MissingMethodException(
+                    nameof(SphSweSimulation),
+                    methodName
+                );
+            }
+
+            method.Invoke(simulation, null);
+        }
+
+        private static SphSweParticle CreateSpatialGridTestParticle(
+            Vector2 position,
+            float effectiveRadius)
+        {
+            return new SphSweParticle(
+                position,
+                1f,
+                effectiveRadius,
+                SphSweParticleType.Fluid
+            );
+        }
+
+        private static void CollectNeighborParticleIndicesByDirectSearch(
+            SphSweParticle[] particles,
+            Vector2 position,
+            float effectiveRadius,
+            List<int> neighborParticleIndices)
+        {
+            neighborParticleIndices.Clear();
+
+            var squaredEffectiveRadius = effectiveRadius * effectiveRadius;
+
+            for (var particleIndex = 0; particleIndex < particles.Length; particleIndex++)
+            {
+                var positionDifference = position - particles[particleIndex].Position;
+                var squaredDistance =
+                    positionDifference.x * positionDifference.x
+                    + positionDifference.y * positionDifference.y;
+
+                if (squaredDistance <= squaredEffectiveRadius)
+                {
+                    neighborParticleIndices.Add(particleIndex);
+                }
+            }
+        }
+
+        private static void VerifyParticleIndexListsEqual(
+            List<int> actualParticleIndices,
+            List<int> expectedParticleIndices,
+            int targetParticleIndex)
+        {
+            actualParticleIndices.Sort();
+            expectedParticleIndices.Sort();
+
+            if (actualParticleIndices.Count != expectedParticleIndices.Count)
+            {
+                throw new InvalidOperationException(
+                    $"The neighbor count differs for particle {targetParticleIndex}. "
+                    + $"Expected {expectedParticleIndices.Count}, "
+                    + $"but received {actualParticleIndices.Count}."
+                );
+            }
+
+            for (var neighborIndex = 0; neighborIndex < expectedParticleIndices.Count; neighborIndex++)
+            {
+                if (actualParticleIndices[neighborIndex] == expectedParticleIndices[neighborIndex])
+                {
+                    continue;
+                }
+
+                throw new InvalidOperationException(
+                    $"The neighbor indices differ for particle {targetParticleIndex}."
+                );
+            }
+        }
+
+        private static void VerifySpatialGridRebuildRemovesOldParticles(
+            SphSweSpatialGrid spatialGrid,
+            List<int> neighborParticleIndices)
+        {
+            var replacementParticles = new[]
+            {
+                CreateSpatialGridTestParticle(new Vector2(10f, 10f), 0.5f)
+            };
+
+            spatialGrid.Rebuild(replacementParticles, 0.5f);
+            spatialGrid.CollectNeighborParticleIndices(
+                Vector2.zero,
+                0.5f,
+                neighborParticleIndices
+            );
+
+            if (neighborParticleIndices.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    "The rebuilt spatial grid retained particles from the previous build."
+                );
+            }
         }
 
         [MenuItem("Tools/SPH-SWE/Tests/Validate Running Simulation Accelerations")]
@@ -419,6 +664,7 @@ namespace Editor
                 VerifyBoundaryParticlePositions(simulation, particles);
                 VerifyBoundaryParticlePositionsAreUnique(particles);
                 VerifyBoundaryParticlesRemainFixed(simulation, particles);
+                VerifyFluidDensityRangeExcludesBoundaryParticles(simulation, particles);
 
                 Debug.Log("SPH-SWE boundary-particle tests passed.");
             }
@@ -583,6 +829,62 @@ namespace Editor
                     "A boundary particle moved during integration."
                 );
             }
+        }
+
+        private static void VerifyFluidDensityRangeExcludesBoundaryParticles(
+            SphSweSimulation simulation,
+            SphSweParticle[] particles)
+        {
+            var expectedMinimumDensity = float.PositiveInfinity;
+            var expectedMaximumDensity = float.NegativeInfinity;
+            var boundaryParticleIndex = -1;
+
+            for (var particleIndex = 0; particleIndex < particles.Length; particleIndex++)
+            {
+                ref var particle = ref particles[particleIndex];
+
+                if (particle.Type == SphSweParticleType.Boundary)
+                {
+                    boundaryParticleIndex = particleIndex;
+                    continue;
+                }
+
+                expectedMinimumDensity = Mathf.Min(expectedMinimumDensity, particle.Density);
+                expectedMaximumDensity = Mathf.Max(expectedMaximumDensity, particle.Density);
+            }
+
+            if (boundaryParticleIndex < 0)
+            {
+                throw new InvalidOperationException(
+                    "The simulation does not contain any boundary particles."
+                );
+            }
+
+            particles[boundaryParticleIndex].Density = expectedMaximumDensity + 10000f;
+
+            var densityRangeExists = InvokeTryCalculateFluidParticleDensityRange(
+                simulation,
+                out var actualMinimumDensity,
+                out var actualMaximumDensity
+            );
+
+            if (!densityRangeExists)
+            {
+                throw new InvalidOperationException(
+                    "The fluid-particle density range was not found."
+                );
+            }
+
+            VerifyFloatApproximatelyEqual(
+                actualMinimumDensity,
+                expectedMinimumDensity,
+                "The minimum fluid density incorrectly includes boundary particles."
+            );
+            VerifyFloatApproximatelyEqual(
+                actualMaximumDensity,
+                expectedMaximumDensity,
+                "The maximum fluid density incorrectly includes boundary particles."
+            );
         }
 
         private static void VerifyMaximumTimeStepUpperLimit(
@@ -909,6 +1211,32 @@ namespace Editor
             }
 
             return (float)method.Invoke(simulation, null);
+        }
+
+        private static bool InvokeTryCalculateFluidParticleDensityRange(
+            SphSweSimulation simulation,
+            out float minimumDensity,
+            out float maximumDensity)
+        {
+            var method = typeof(SphSweSimulation).GetMethod(
+                "TryCalculateFluidParticleDensityRange",
+                BindingFlags.Instance | BindingFlags.NonPublic
+            );
+
+            if (method == null)
+            {
+                throw new MissingMethodException(
+                    nameof(SphSweSimulation),
+                    "TryCalculateFluidParticleDensityRange"
+                );
+            }
+
+            var arguments = new object[] { 0f, 0f };
+            var densityRangeExists = (bool)method.Invoke(simulation, arguments);
+            minimumDensity = (float)arguments[0];
+            maximumDensity = (float)arguments[1];
+
+            return densityRangeExists;
         }
 
         private static float GetPrivateFloat(

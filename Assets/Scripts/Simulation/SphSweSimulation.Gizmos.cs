@@ -33,10 +33,11 @@ namespace Simulation
                 return;
             }
 
-            var particleDensityRangeExists = TryCalculateParticleDensityRange(
-                out var minimumDensity,
-                out var maximumDensity
-            );
+            var particleDensityRangeExists =
+                TryCalculateFluidParticleDensityRange(
+                    out var minimumDensity,
+                    out var maximumDensity
+                );
 
             foreach (var particle in Particles)
             {
@@ -69,36 +70,34 @@ namespace Simulation
             }
         }
 
-        /// <summary>
-        /// 現在生成されている粒子から密度の最小値と最大値を計算する。
-        /// </summary>
-        private bool TryCalculateParticleDensityRange(out float minimumDensity, out float maximumDensity)
+        private bool TryCalculateFluidParticleDensityRange(out float minimumDensity, out float maximumDensity)
         {
-            minimumDensity = 0f;
-            maximumDensity = 0f;
-
-            if (Particles == null || Particles.Length == 0)
-            {
-                return false;
-            }
-
             minimumDensity = float.PositiveInfinity;
             maximumDensity = float.NegativeInfinity;
+            var fluidParticleFound = false;
 
             foreach (var particle in Particles)
             {
-                minimumDensity = Mathf.Min(
-                    minimumDensity,
-                    particle.Density
-                );
+                if (particle.Type != SphSweParticleType.Fluid)
+                {
+                    continue;
+                }
 
-                maximumDensity = Mathf.Max(
-                    maximumDensity,
-                    particle.Density
-                );
+                minimumDensity = Mathf.Min(minimumDensity, particle.Density);
+                maximumDensity = Mathf.Max(maximumDensity, particle.Density);
+
+                fluidParticleFound = true;
             }
 
-            return true;
+            if (fluidParticleFound)
+            {
+                return true;
+            }
+
+            minimumDensity = 0f;
+            maximumDensity = 0f;
+
+            return false;
         }
 
         /// <summary>

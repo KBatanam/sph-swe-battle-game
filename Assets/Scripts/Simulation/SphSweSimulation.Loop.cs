@@ -58,7 +58,7 @@ namespace Simulation
         /// <returns>実際に進めたシミュレーション時間。</returns>
         private float SimulateAdaptiveStep(float availableSimulationTime)
         {
-            CalculateDensities();
+            CalculateDensitiesUsingSpatialGrid();
             CalculateAccelerations();
 
             var maximumStableTimeStep =

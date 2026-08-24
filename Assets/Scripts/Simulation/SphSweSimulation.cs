@@ -154,9 +154,9 @@ namespace Simulation
         private void Initialize()
         {
             GenerateParticles();
-            CalculateDensities();
+            CalculateDensitiesUsingSpatialGrid();
             CalculateAccelerations();
-            LogDensityStatistics();
+            LogFluidParticleDensityStatistics();
         }
         
         /// <summary>
@@ -232,10 +232,11 @@ namespace Simulation
         }
         
         /// <summary>
-        /// 現在の粒子密度について、最小値、最大値、平均値を表示する。
+        /// 流体粒子の密度について、最小値、最大値、平均値を表示する。
+        /// 境界条件を表現するための境界粒子は統計対象に含めない。
         /// </summary>
-        [ContextMenu("Log Density Statistics")]
-        private void LogDensityStatistics()
+        [ContextMenu("Log Fluid Particle Density Statistics")]
+        private void LogFluidParticleDensityStatistics()
         {
             if (particles == null || particles.Length == 0)
             {
@@ -245,20 +246,32 @@ namespace Simulation
             var minimumDensity = float.PositiveInfinity;
             var maximumDensity = float.NegativeInfinity;
             var totalDensity = 0f;
+            var fluidParticleCount = 0;
 
             foreach (var particle in particles)
             {
+                if (particle.Type != SphSweParticleType.Fluid)
+                {
+                    continue;
+                }
+
                 minimumDensity = Mathf.Min(minimumDensity, particle.Density);
                 maximumDensity = Mathf.Max(maximumDensity, particle.Density);
 
                 totalDensity += particle.Density;
+                fluidParticleCount++;
             }
 
-            var averageDensity =
-                totalDensity / particles.Length;
+            if (fluidParticleCount == 0)
+            {
+                Debug.LogWarning("Fluid particles were not found.", this);
+                return;
+            }
+
+            var averageDensity = totalDensity / fluidParticleCount;
 
             var message = ZString.Format(
-                "Density — Min: {0:F5}, Max: {1:F5}, Average: {2:F5}",
+                "Fluid density — Min: {0:F5}, Max: {1:F5}, Average: {2:F5}",
                 minimumDensity,
                 maximumDensity,
                 averageDensity

@@ -16,7 +16,8 @@ namespace Simulation
         }
 
         /// <summary>
-        /// 流体深さの勾配から全流体粒子の加速度を計算する。
+        /// 流体深さの勾配から、各流体粒子の加速度を計算する。
+        /// 計算対象は有効半径内の近傍粒子に限定する。
         /// </summary>
         private void CalculateFluidDepthGradientAccelerations()
         {
@@ -26,8 +27,7 @@ namespace Simulation
                 return;
             }
 
-            var fluidDepthGradientAccelerationScale =
-                -gravityAcceleration / referenceDensity;
+            var fluidDepthGradientAccelerationScale = -gravityAcceleration / referenceDensity;
 
             for (var particleIndex = 0; particleIndex < particles.Length; particleIndex++)
             {
@@ -40,34 +40,39 @@ namespace Simulation
                 }
 
                 var fluidDepthGradientAcceleration = Vector2.zero;
+                var neighborParticleIndices = neighborParticleIndicesByParticle[particleIndex];
 
-                for (var neighborIndex = 0; neighborIndex < particles.Length; neighborIndex++)
+                foreach (var neighborParticleIndex in neighborParticleIndices)
                 {
-                    if (particleIndex == neighborIndex)
+                    if (particleIndex == neighborParticleIndex)
                     {
                         continue;
                     }
 
-                    var neighbor = particles[neighborIndex];
+                    ref var neighbor = ref particles[neighborParticleIndex];
 
                     var positionDifference = particle.Position - neighbor.Position;
 
-                    var spikyGradient =
-                        SphSweKernel.EvaluateSpikyGradient(positionDifference, particle.EffectiveRadius);
+                    var spikyGradient = SphSweKernel.EvaluateSpikyGradient(
+                        positionDifference,
+                        particle.EffectiveRadius
+                    );
 
                     var combinedSpikyGradient = spikyGradient * 2f;
 
                     fluidDepthGradientAcceleration +=
-                        fluidDepthGradientAccelerationScale * neighbor.Mass * combinedSpikyGradient;
+                        fluidDepthGradientAccelerationScale
+                        * neighbor.Mass
+                        * combinedSpikyGradient;
                 }
 
-                particle.Acceleration =
-                    fluidDepthGradientAcceleration;
+                particle.Acceleration = fluidDepthGradientAcceleration;
             }
         }
 
         /// <summary>
-        /// 近傍粒子との速度差から粘性加速度を計算し、現在の加速度へ加算する。
+        /// 有効半径内の近傍粒子との速度差から粘性加速度を計算し、
+        /// 現在の加速度へ加算する。
         /// </summary>
         private void AddViscosityAccelerations()
         {
@@ -93,15 +98,16 @@ namespace Simulation
 
                 var viscosityAcceleration = Vector2.zero;
                 var particleViscosityScale = viscosityCoefficient / particle.Density;
+                var neighborParticleIndices = neighborParticleIndicesByParticle[particleIndex];
 
-                for (var neighborIndex = 0; neighborIndex < particles.Length; neighborIndex++)
+                foreach (var neighborParticleIndex in neighborParticleIndices)
                 {
-                    if (particleIndex == neighborIndex)
+                    if (particleIndex == neighborParticleIndex)
                     {
                         continue;
                     }
 
-                    var neighbor = particles[neighborIndex];
+                    ref var neighbor = ref particles[neighborParticleIndex];
 
                     if (neighbor.Density <= 0f)
                     {
@@ -113,19 +119,18 @@ namespace Simulation
                     var differenceZ = positionDifference.y;
                     var squaredDistance = differenceX * differenceX + differenceZ * differenceZ;
 
-                    var viscosityLaplacian = SphSweKernel.EvaluateViscosityLaplacian(
-                        squaredDistance,
-                        particle.EffectiveRadius
-                    );
+                    var viscosityLaplacian =
+                        SphSweKernel.EvaluateViscosityLaplacian(
+                            squaredDistance,
+                            particle.EffectiveRadius
+                        );
 
                     var combinedViscosityLaplacian = viscosityLaplacian * 2f;
                     var velocityDifference = neighbor.Velocity - particle.Velocity;
 
-                    viscosityAcceleration += particleViscosityScale
-                                             * neighbor.Mass
-                                             * velocityDifference
-                                             / neighbor.Density
-                                             * combinedViscosityLaplacian;
+                    viscosityAcceleration +=
+                        particleViscosityScale * neighbor.Mass * velocityDifference
+                        / neighbor.Density * combinedViscosityLaplacian;
                 }
 
                 particle.Acceleration += viscosityAcceleration;
