@@ -107,3 +107,10 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# IDE
+.vscode/
+*.slnx
+
+# MCP検証用スクリーンショット
+/[Aa]ssets/Screenshots/
