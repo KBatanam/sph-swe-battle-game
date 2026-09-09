@@ -19,8 +19,7 @@ namespace Simulation
         [SerializeField, Min(1)]
         private int particleCountZ = 16;
 
-        [SerializeField, Min(0.001f)]
-        private float particleSpacing = 0.25f;
+        private float particleSpacing;
 
         [SerializeField]
         private Vector2 simulationCenter = Vector2.zero;
@@ -28,10 +27,13 @@ namespace Simulation
         [Header("Particle Properties")]
 
         [SerializeField, Min(0.0001f)]
-        private float particleMass = 1f;
+        private float particleMass = 2f;
 
-        [SerializeField, Min(0.001f)]
-        private float effectiveRadius = 0.5f;
+        [SerializeField, Min(1)]
+        private int kernelParticleCount = 20;
+
+        private float effectiveRadius;
+        private float particleRadius;
         
         [SerializeField, Min(0.001f)]
         private float referenceDensity = 998.29f;
@@ -48,7 +50,7 @@ namespace Simulation
         private bool boundaryParticleGenerationEnabled = true;
 
         [SerializeField, Min(1)]
-        private int boundaryParticleLayerCount = 3;
+        private int boundaryParticleLayerCount = 2;
 
         [SerializeField, Range(0.1f, 1f)]
         private float boundaryParticleSpacingScale = 0.95f;
@@ -123,6 +125,9 @@ namespace Simulation
         
         public SphSweParticle[] Particles => particles ?? System.Array.Empty<SphSweParticle>();
         public int ParticleCount => particles?.Length ?? 0;
+        public float ParticleSpacing => particleSpacing;
+        public float EffectiveRadius => effectiveRadius;
+        public float ParticleRadius => particleRadius;
 
         private void Awake()
         {
@@ -133,11 +138,11 @@ namespace Simulation
         {
             particleCountX = Mathf.Max(1, particleCountX);
             particleCountZ = Mathf.Max(1, particleCountZ);
-            particleSpacing = Mathf.Max(0.001f, particleSpacing);
             particleMass = Mathf.Max(0.0001f, particleMass);
-            effectiveRadius = Mathf.Max(0.001f, effectiveRadius);
+            kernelParticleCount = Mathf.Max(1, kernelParticleCount);
             gizmoRadius = Mathf.Max(0.001f, gizmoRadius);
             referenceDensity = Mathf.Max(0.001f, referenceDensity);
+            CalculateParticleDimensionsFromReferenceParameters();
             gravityAcceleration = Mathf.Max(0f, gravityAcceleration);
             particleAccelerationGizmoScale = Mathf.Max(0f, particleAccelerationGizmoScale);
             viscosityCoefficient = Mathf.Max(0f, viscosityCoefficient);
@@ -153,10 +158,30 @@ namespace Simulation
 
         private void Initialize()
         {
+            CalculateParticleDimensionsFromReferenceParameters();
             GenerateParticles();
             CalculateDensitiesUsingSpatialGrid();
             CalculateAccelerations();
             LogFluidParticleDensityStatistics();
+        }
+
+        /// <summary>
+        /// 粒子質量、目標近傍粒子数および参照密度から、
+        /// 全粒子で共通して使用する固定有効半径、粒子半径および粒子間隔を計算する。
+        /// 計算結果はシミュレーション中に変更しない。
+        /// </summary>
+        private void CalculateParticleDimensionsFromReferenceParameters()
+        {
+            effectiveRadius = Mathf.Sqrt(
+                particleMass * kernelParticleCount
+                / (Mathf.PI * referenceDensity)
+            );
+
+            particleRadius =
+                0.5f * effectiveRadius
+                * Mathf.Sqrt(Mathf.PI / kernelParticleCount);
+
+            particleSpacing = particleRadius * 2f;
         }
         
         /// <summary>

@@ -17,6 +17,8 @@ namespace Simulation
         /// </summary>
         private void RebuildNeighborParticleIndices()
         {
+            using var profilingScope = NeighborSearchProfilerMarker.Auto();
+
             if (particles == null || particles.Length == 0)
             {
                 return;
@@ -24,17 +26,23 @@ namespace Simulation
 
             EnsureNeighborParticleIndexListsMatchParticleCount();
 
-            spatialGrid.Rebuild(particles, effectiveRadius);
-
-            for (var particleIndex = 0; particleIndex < particles.Length; particleIndex++)
+            using (SpatialGridRebuildProfilerMarker.Auto())
             {
-                ref var particle = ref particles[particleIndex];
+                spatialGrid.Rebuild(particles, effectiveRadius);
+            }
 
-                spatialGrid.CollectNeighborParticleIndices(
-                    particle.Position,
-                    particle.EffectiveRadius,
-                    neighborParticleIndicesByParticle[particleIndex]
-                );
+            using (NeighborCollectionProfilerMarker.Auto())
+            {
+                for (var particleIndex = 0; particleIndex < particles.Length; particleIndex++)
+                {
+                    ref var particle = ref particles[particleIndex];
+
+                    spatialGrid.CollectNeighborParticleIndices(
+                        particle.Position,
+                        particle.EffectiveRadius,
+                        neighborParticleIndicesByParticle[particleIndex]
+                    );
+                }
             }
         }
 
@@ -64,6 +72,8 @@ namespace Simulation
         /// </summary>
         private void CalculateDensitiesUsingSpatialGrid()
         {
+            using var profilingScope = DensityCalculationProfilerMarker.Auto();
+
             if (particles == null || particles.Length == 0)
             {
                 return;

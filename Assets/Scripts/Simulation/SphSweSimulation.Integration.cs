@@ -11,6 +11,8 @@ namespace Simulation
         /// </summary>
         private void IntegrateParticles(float deltaTime)
         {
+            using var profilingScope = IntegrationProfilerMarker.Auto();
+
             if (deltaTime <= 0f)
             {
                 throw new ArgumentOutOfRangeException(

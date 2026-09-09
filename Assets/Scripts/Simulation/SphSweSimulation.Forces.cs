@@ -11,6 +11,8 @@ namespace Simulation
         [ContextMenu("Calculate Accelerations")]
         private void CalculateAccelerations()
         {
+            using var profilingScope = AccelerationCalculationProfilerMarker.Auto();
+
             CalculateFluidDepthGradientAccelerations();
             AddViscosityAccelerations();
         }
@@ -21,6 +23,8 @@ namespace Simulation
         /// </summary>
         private void CalculateFluidDepthGradientAccelerations()
         {
+            using var profilingScope = FluidDepthGradientProfilerMarker.Auto();
+
             if (particles == null || particles.Length == 0)
             {
                 Debug.LogWarning("Particles have not been generated.", this);
@@ -76,6 +80,8 @@ namespace Simulation
         /// </summary>
         private void AddViscosityAccelerations()
         {
+            using var profilingScope = ViscosityProfilerMarker.Auto();
+
             if (particles == null || particles.Length == 0)
             {
                 Debug.LogWarning("Particles have not been generated.", this);

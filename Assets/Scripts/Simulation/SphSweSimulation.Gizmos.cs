@@ -7,6 +7,8 @@ namespace Simulation
     {
         private void OnDrawGizmos()
         {
+            using var profilingScope = GizmoDrawingProfilerMarker.Auto();
+
             if (!particleGizmoDrawingEnabled)
             {
                 return;

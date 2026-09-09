@@ -524,12 +524,24 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 08efdbd344c3b104abb3bc7235c473bc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Simulation.SphSweSimulation
+  simulationExecutionEnabled: 1
+  courantNumber: 0.25
+  maximumSimulationTimeStep: 0.004
+  maximumSimulationSubstepCount: 20
+  maximumAccumulatedSimulationTime: 0.04
   particleCountX: 5
   particleCountZ: 5
-  particleSpacing: 0.25
   simulationCenter: {x: 0, y: 0}
-  particleMass: 1
-  effectiveRadius: 0.5
+  particleMass: 2
+  kernelParticleCount: 20
+  referenceDensity: 998.29
+  gravityAcceleration: 9.81
+  viscosityCoefficient: 30
+  boundaryParticleGenerationEnabled: 1
+  boundaryParticleLayerCount: 2
+  boundaryParticleSpacingScale: 0.95
+  boundaryParticleColor: {r: 0.2, g: 0.2, b: 0.2, a: 1}
+  simulationAreaSize: {x: 5, y: 5}
   particleGizmoDrawingEnabled: 1
   gizmoRadius: 0.08
   gizmoHeight: 0
@@ -537,6 +549,9 @@ MonoBehaviour:
   densityBasedParticleColoringEnabled: 1
   lowDensityParticleColor: {r: 0.1, g: 0.4, b: 1, a: 1}
   highDensityParticleColor: {r: 1, g: 0.15, b: 0.05, a: 1}
+  particleAccelerationGizmoDrawingEnabled: 1
+  particleAccelerationGizmoScale: 0.25
+  particleAccelerationGizmoColor: {r: 1, g: 0.9, b: 0.1, a: 1}
 --- !u!4 &734073336
 Transform:
   m_ObjectHideFlags: 0

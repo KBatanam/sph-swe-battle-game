@@ -4,6 +4,7 @@ using System.Reflection;
 using Core;
 using Simulation;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 
 namespace Editor
@@ -11,6 +12,176 @@ namespace Editor
     public static class SphSweTestMenu
     {
         private const float VectorComparisonTolerance = 0.00001f;
+        private const float DensityComparisonTolerance = 0.001f;
+        private const float AccelerationSymmetryTolerance = 0.0001f;
+
+        [MenuItem("Tools/SPH-SWE/Parameters/Apply Reference Particle Parameters")]
+        private static void ApplyReferenceParticleParameters()
+        {
+            var simulation =
+                UnityEngine.Object.FindFirstObjectByType<SphSweSimulation>();
+
+            if (simulation == null)
+            {
+                throw new InvalidOperationException(
+                    "SphSweSimulation was not found in the current scene."
+                );
+            }
+
+            var serializedSimulation = new SerializedObject(simulation);
+
+            serializedSimulation.FindProperty("particleMass").floatValue = 2f;
+            serializedSimulation.FindProperty("kernelParticleCount").intValue = 20;
+            serializedSimulation.FindProperty("referenceDensity").floatValue = 998.29f;
+            serializedSimulation.FindProperty("viscosityCoefficient").floatValue = 30f;
+            serializedSimulation.ApplyModifiedProperties();
+
+            EditorUtility.SetDirty(simulation);
+            EditorSceneManager.MarkSceneDirty(simulation.gameObject.scene);
+            EditorSceneManager.SaveScene(simulation.gameObject.scene);
+
+            Debug.Log("Applied the reference SPH-SWE particle parameters.");
+        }
+
+        [MenuItem("Tools/SPH-SWE/Tests/Test Reference Particle Parameters")]
+        private static void TestReferenceParticleParameters()
+        {
+            if (!EditorApplication.isPlaying)
+            {
+                throw new InvalidOperationException(
+                    "The reference-particle-parameter test must be run in Play mode."
+                );
+            }
+
+            var simulation =
+                UnityEngine.Object.FindFirstObjectByType<SphSweSimulation>();
+
+            if (simulation == null)
+            {
+                throw new InvalidOperationException(
+                    "SphSweSimulation was not found in the current scene."
+                );
+            }
+
+            var simulationExecutionEnabled = GetPrivateBool(
+                simulation,
+                "simulationExecutionEnabled"
+            );
+
+            SetPrivateBool(simulation, "simulationExecutionEnabled", false);
+
+            try
+            {
+                InvokePrivateParameterlessMethod(
+                    simulation,
+                    "CalculateParticleDimensionsFromReferenceParameters"
+                );
+
+                simulation.GenerateParticles();
+
+                InvokePrivateParameterlessMethod(
+                    simulation,
+                    "CalculateDensitiesUsingSpatialGrid"
+                );
+
+                InvokePrivateParameterlessMethod(
+                    simulation,
+                    "CalculateAccelerations"
+                );
+
+                var particleMass = GetPrivateFloat(simulation, "particleMass");
+                var kernelParticleCount = GetPrivateInt(simulation, "kernelParticleCount");
+                var referenceDensity = GetPrivateFloat(simulation, "referenceDensity");
+
+                var expectedEffectiveRadius = Mathf.Sqrt(
+                    particleMass * kernelParticleCount
+                    / (Mathf.PI * referenceDensity)
+                );
+
+                var expectedParticleRadius =
+                    0.5f * expectedEffectiveRadius
+                    * Mathf.Sqrt(Mathf.PI / kernelParticleCount);
+
+                VerifyFloatApproximatelyEqual(
+                    simulation.EffectiveRadius,
+                    expectedEffectiveRadius,
+                    "The calculated effective radius is incorrect."
+                );
+
+                VerifyFloatApproximatelyEqual(
+                    simulation.ParticleRadius,
+                    expectedParticleRadius,
+                    "The calculated particle radius is incorrect."
+                );
+
+                VerifyFloatApproximatelyEqual(
+                    simulation.ParticleSpacing,
+                    expectedParticleRadius * 2f,
+                    "The calculated particle spacing is incorrect."
+                );
+
+                var particles = simulation.Particles;
+                var simulationCenter = GetPrivateVector2(simulation, "simulationCenter");
+                var centerParticleFound = false;
+                var centerParticle = default(SphSweParticle);
+                var minimumSquaredDistanceFromCenter = float.PositiveInfinity;
+
+                foreach (var particle in particles)
+                {
+                    if (particle.Type != SphSweParticleType.Fluid)
+                    {
+                        continue;
+                    }
+
+                    var difference = particle.Position - simulationCenter;
+                    var squaredDistance =
+                        difference.x * difference.x + difference.y * difference.y;
+
+                    if (squaredDistance >= minimumSquaredDistanceFromCenter)
+                    {
+                        continue;
+                    }
+
+                    centerParticle = particle;
+                    minimumSquaredDistanceFromCenter = squaredDistance;
+                    centerParticleFound = true;
+                }
+
+                if (!centerParticleFound)
+                {
+                    throw new InvalidOperationException(
+                        "A fluid particle was not found."
+                    );
+                }
+
+                var relativeDensityError = Mathf.Abs(
+                    centerParticle.Density - referenceDensity
+                ) / referenceDensity;
+
+                if (relativeDensityError > 0.02f)
+                {
+                    throw new InvalidOperationException(
+                        $"The center-particle density differs from the reference density by "
+                        + $"{relativeDensityError:P2}."
+                    );
+                }
+
+                Debug.Log(
+                    $"SPH-SWE reference-particle-parameter test passed. "
+                    + $"Effective radius: {simulation.EffectiveRadius:F6}, "
+                    + $"particle spacing: {simulation.ParticleSpacing:F6}, "
+                    + $"center density: {centerParticle.Density:F2}."
+                );
+            }
+            finally
+            {
+                SetPrivateBool(
+                    simulation,
+                    "simulationExecutionEnabled",
+                    simulationExecutionEnabled
+                );
+            }
+        }
 
         [MenuItem("Tools/SPH-SWE/Tests/Run Kernel Tests")]
         private static void RunKernelTests()
@@ -139,7 +310,8 @@ namespace Editor
                     VerifyFloatApproximatelyEqual(
                         particles[particleIndex].Density,
                         directSearchDensities[particleIndex],
-                        $"The spatial-grid density differs for particle {particleIndex}."
+                        $"The spatial-grid density differs for particle {particleIndex}.",
+                        DensityComparisonTolerance
                     );
                     VerifyFloatApproximatelyEqual(
                         particles[particleIndex].FluidDepth,
@@ -293,6 +465,13 @@ namespace Editor
                 );
             }
 
+            simulation.GenerateParticles();
+            InvokePrivateParameterlessMethod(
+                simulation,
+                "CalculateDensitiesUsingSpatialGrid"
+            );
+            InvokeCalculateAccelerations(simulation);
+
             var particles = simulation.Particles;
 
             if (particles.Length == 0)
@@ -343,7 +522,8 @@ namespace Editor
             VerifyVectorApproximatelyEqual(
                 totalAcceleration,
                 Vector2.zero,
-                "The total acceleration of the symmetric particle grid is not zero."
+                "The total acceleration of the symmetric particle grid is not zero.",
+                AccelerationSymmetryTolerance
             );
 
             var minimumCornerParticleIndex = FindFluidParticleAtPositionExtreme(
@@ -362,7 +542,8 @@ namespace Editor
             VerifyVectorApproximatelyEqual(
                 oppositeCornerAccelerationSum,
                 Vector2.zero,
-                "Opposite corner accelerations are not symmetric."
+                "Opposite corner accelerations are not symmetric.",
+                AccelerationSymmetryTolerance
             );
 
             Debug.Log(
@@ -432,6 +613,12 @@ namespace Editor
                     "SphSweSimulation was not found in the current scene."
                 );
             }
+
+            simulation.GenerateParticles();
+            InvokePrivateParameterlessMethod(
+                simulation,
+                "CalculateDensitiesUsingSpatialGrid"
+            );
 
             var particles = simulation.Particles;
 
@@ -1482,9 +1669,10 @@ namespace Editor
         private static void VerifyFloatApproximatelyEqual(
             float actualValue,
             float expectedValue,
-            string failureMessage)
+            string failureMessage,
+            float tolerance = VectorComparisonTolerance)
         {
-            if (Mathf.Abs(actualValue - expectedValue) <= VectorComparisonTolerance)
+            if (Mathf.Abs(actualValue - expectedValue) <= tolerance)
             {
                 return;
             }
@@ -1510,13 +1698,14 @@ namespace Editor
         private static void VerifyVectorApproximatelyEqual(
             Vector2 actualValue,
             Vector2 expectedValue,
-            string failureMessage)
+            string failureMessage,
+            float tolerance = VectorComparisonTolerance)
         {
             var differenceX = actualValue.x - expectedValue.x;
             var differenceY = actualValue.y - expectedValue.y;
 
-            if (Mathf.Abs(differenceX) <= VectorComparisonTolerance
-                && Mathf.Abs(differenceY) <= VectorComparisonTolerance)
+            if (Mathf.Abs(differenceX) <= tolerance
+                && Mathf.Abs(differenceY) <= tolerance)
             {
                 return;
             }

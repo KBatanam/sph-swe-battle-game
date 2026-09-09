@@ -14,7 +14,7 @@ namespace Simulation
         private float courantNumber = 0.25f;
 
         [SerializeField, Min(0.000001f)]
-        private float maximumSimulationTimeStep = 0.002f;
+        private float maximumSimulationTimeStep = 0.004f;
 
         [SerializeField, Min(1)]
         private int maximumSimulationSubstepCount = 20;
@@ -23,20 +23,28 @@ namespace Simulation
         private float maximumAccumulatedSimulationTime = 0.04f;
 
         private float accumulatedSimulationTime;
+        private int lastCompletedSimulationSubstepCount;
+        private float lastRequestedSimulationTime;
+        private float lastSimulatedTime;
 
-        private void FixedUpdate()
+        private void Update()
         {
+            using var profilingScope = SimulationUpdateProfilerMarker.Auto();
+
             if (!simulationExecutionEnabled)
             {
                 return;
             }
 
             accumulatedSimulationTime = Mathf.Min(
-                accumulatedSimulationTime + Time.fixedDeltaTime,
+                accumulatedSimulationTime + Time.deltaTime,
                 maximumAccumulatedSimulationTime
             );
 
+            lastRequestedSimulationTime = accumulatedSimulationTime;
+
             var completedSubstepCount = 0;
+            var simulatedTime = 0f;
 
             while (accumulatedSimulationTime > 0f && completedSubstepCount < maximumSimulationSubstepCount)
             {
@@ -47,8 +55,12 @@ namespace Simulation
                     accumulatedSimulationTime - elapsedSimulationTime
                 );
 
+                simulatedTime += elapsedSimulationTime;
                 completedSubstepCount++;
             }
+
+            lastCompletedSimulationSubstepCount = completedSubstepCount;
+            lastSimulatedTime = simulatedTime;
         }
 
         /// <summary>
@@ -58,6 +70,8 @@ namespace Simulation
         /// <returns>実際に進めたシミュレーション時間。</returns>
         private float SimulateAdaptiveStep(float availableSimulationTime)
         {
+            using var profilingScope = AdaptiveStepProfilerMarker.Auto();
+
             CalculateDensitiesUsingSpatialGrid();
             CalculateAccelerations();
 
