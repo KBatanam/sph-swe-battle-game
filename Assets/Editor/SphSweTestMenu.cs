@@ -1311,7 +1311,7 @@ namespace Editor
             particle.Type = SphSweParticleType.Boundary;
         }
 
-        private static int FindParticleClosestToCenter(Core.SphSweParticle[] particles)
+        private static int FindParticleClosestToCenter(SphSweParticle[] particles)
         {
             var center = Vector2.zero;
 
