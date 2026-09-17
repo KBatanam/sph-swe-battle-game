@@ -28,6 +28,7 @@
 13. [フレーム駆動のシミュレーションループ](13-Frame-Driven-Simulation-Loop.md)
 14. [連続配列型の空間グリッド](14-Contiguous-Array-Spatial-Grid.md)
 15. [時間刻みと境界粒子層数の比較](15-Time-Step-And-Boundary-Layer-Benchmark.md)
+16. [Compute Shader移植方針](16-Compute-Shader-Migration.md)
 
 ## 現在の到達点
 
@@ -58,6 +59,8 @@
 - 短時間試験では境界2層と最大時間刻み`0.004`秒を次の推奨試験設定とする
 - 境界粒子は2層を正式採用し、Scene設定とスクリプトのデフォルト値へ反映済み
 - 最大時間刻みは長時間安定性試験を通過した`0.004`秒を正式採用し、CFL条件と併用
+- CPU版を検証基準として保持し、大規模粒子向けにCompute Shader版を別実装する方針を決定
+- GPU転送用の48バイト粒子構造とメモリレイアウトテストを追加
 
 ## Gitブランチ運用
 

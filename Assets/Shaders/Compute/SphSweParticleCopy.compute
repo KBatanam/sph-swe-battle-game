@@ -1,0 +1,20 @@
+#pragma kernel CopyParticles
+#include "SphSweGpuParticle.hlsl"
+
+StructuredBuffer<SphSweGpuParticle> _InputParticles;
+RWStructuredBuffer<SphSweGpuParticle> _OutputParticles;
+
+uint _ParticleCount;
+
+[numthreads(64, 1, 1)]
+void CopyParticles(uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint particleIndex = dispatchThreadID.x;
+    
+    if (particleIndex >= _ParticleCount)
+    {
+        return;
+    }
+    
+    _OutputParticles[particleIndex] = _InputParticles[particleIndex];
+}

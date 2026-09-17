@@ -1,0 +1,19 @@
+#pragma kernel ClearCellParticleCounts
+#include "SphSweGpuParticle.hlsl"
+
+RWStructuredBuffer<uint> _CellParticleCounts;
+
+uint _CellCount;
+
+[numthreads(64, 1, 1)]
+void ClearCellParticleCounts(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    uint cellIndex = dispatchThreadId.x;
+
+    if (cellIndex >= _CellCount)
+    {
+        return;
+    }
+
+    _CellParticleCounts[cellIndex] = 0;
+}
