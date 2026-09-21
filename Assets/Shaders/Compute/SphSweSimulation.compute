@@ -1,9 +1,38 @@
 #pragma kernel ClearCellParticleCounts
+#pragma kernel RegisterParticlesInCells
+#pragma kernel ScanCellParticleCountsByGroup
+
 #include "SphSweGpuParticle.hlsl"
 
+StructuredBuffer<SphSweGpuParticle> _Particles;
+RWStructuredBuffer<uint> _ParticleCellIndices;
 RWStructuredBuffer<uint> _CellParticleCounts;
 
+// 各256セル内で計算した開始位置
+RWStructuredBuffer<uint> _CellParticleStartIndices;
+// そのグループが担当したセルの粒子数合計
+RWStructuredBuffer<uint> _CellParticleCountSumsByGroup;
+
+uint _ParticleCount;
 uint _CellCount;
+
+float2 _GridMinimumPosition;
+float _GridCellSize;
+uint _GridCellCountX;
+uint _GridCellCountZ;
+
+static const uint InvalidCellIndex = 0xffffffffu;
+
+static const uint ScanThreadCount = 128;
+// ここでいうセルは、近傍探索のためにシミュレーション平面を分割した正方形区画。
+// 粒子そのものではない。
+// 128スレッド * 2セル
+// 1スレッドが2セルを担当する
+// 256セルは1つのスレッドグループが一度にScanする最大要素数
+static const uint ScanElementCount = ScanThreadCount * 2;
+
+// groupsharedは同じスレッドグループ内で共有される一時メモリ
+groupshared uint SharedScanValues[256];
 
 [numthreads(64, 1, 1)]
 void ClearCellParticleCounts(uint3 dispatchThreadId : SV_DispatchThreadID)
@@ -16,4 +45,133 @@ void ClearCellParticleCounts(uint3 dispatchThreadId : SV_DispatchThreadID)
     }
 
     _CellParticleCounts[cellIndex] = 0;
+}
+
+[numthreads(64, 1, 1)]
+void RegisterParticlesInCells(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    uint particleIndex = dispatchThreadId.x;
+    
+    if (particleIndex >= _ParticleCount)
+    {
+        return;
+    }
+    
+    float2 particlePosition = _Particles[particleIndex].Position;
+    int2 localCellCoordinate = (int2)floor((particlePosition - _GridMinimumPosition) / _GridCellSize);
+    
+    if (localCellCoordinate.x < 0 || localCellCoordinate.y <0 || 
+        localCellCoordinate.x >= (int)_GridCellCountX || localCellCoordinate.y >= (int)_GridCellCountZ)
+    {
+        _ParticleCellIndices[particleIndex] = InvalidCellIndex;
+        return;
+    }
+    
+    uint cellIndex = (uint)localCellCoordinate.y * _GridCellCountX + (uint)localCellCoordinate.x;
+    _ParticleCellIndices[particleIndex] = cellIndex;
+    
+    InterlockedAdd(_CellParticleCounts[cellIndex], 1);
+}
+
+[numthreads(128, 1, 1)]
+void ScanCellParticleCountsByGroup(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+{
+    /*
+    128スレッドの各スレッドに、256セルの前半から1個、後半から1個を割り当て、
+    さらにグループ番号を使ってグリッド全体のセル番号へ変換
+    */
+    
+    // 現在のスレッドがグループ内で何番目か
+    // 128スレッド指定なので、0~127の範囲
+    uint firstLocalIndex = groupThreadId.x;
+    // 128~255の範囲
+    uint secondLocalIndex = firstLocalIndex + ScanThreadCount;
+    // groupId.xは何番目のスレッドグループかを示す。したがって、
+    // groupId.x = 0, 1, 2, ... といった感じで
+    // グループ0 → セル0～255
+    // グループ1 → セル256～511
+    // グループ2 → セル512～767
+    // といった感じに担当
+    uint groupStartIndex = groupId.x * ScanElementCount;
+    uint firstCellIndex = groupStartIndex + firstLocalIndex;
+    uint secondCellIndex = groupStartIndex + secondLocalIndex;
+    
+    SharedScanValues[firstLocalIndex] = firstCellIndex < _CellCount ? _CellParticleCounts[firstCellIndex] : 0;
+    SharedScanValues[secondLocalIndex] = secondCellIndex < _CellCount ? _CellParticleCounts[secondCellIndex] : 0;
+    
+    // グループ内の全スレッドがSharedScanValues (groupshared) への書き込みを終えるまで待機する。
+    // Scanでは他スレッドが書いた値を参照するため、全員が同じ段階まで到達している必要がある。
+    GroupMemoryBarrierWithGroupSync();
+    
+    // 要点:
+    // Up-Sweepは、セルの粒子数を大きな範囲の合計へまとめる。
+    // Down-Sweepは、その合計情報を使い、各セルが粒子インデックス格納配列の
+    // 何番目から使用を開始するかを求める。
+
+    // Up-Sweep: 範囲を倍にしながら部分和を作る。
+    // 部分和は、Down-Sweepで左右の範囲へ開始位置を配るために使用する。
+    for (uint offset = 1; offset < ScanElementCount; offset *= 2)
+    {
+        // offset * 2が現在まとめる区間の長さ。
+        // この式で各スレッドが担当する区間の末尾インデックスを求める。
+        // 例: offsetが1なら1, 3, 5, ...、offsetが2なら3, 7, 11, ...となる。
+        uint scanIndex = (groupThreadId.x + 1) * offset * 2 - 1;
+        
+        if (scanIndex < ScanElementCount)
+        {
+            // 区間の後半に保持された部分和へ、前半の部分和を加える。
+            SharedScanValues[scanIndex] += SharedScanValues[scanIndex - offset];
+        }
+        
+        // 現在の段階の部分和がすべて完成してから、次のoffsetへ進む。
+        GroupMemoryBarrierWithGroupSync();
+    }
+    
+    if (groupThreadId.x == 0)
+    {
+        uint lastScanIndex = ScanElementCount - 1;
+        _CellParticleCountSumsByGroup[groupId.x] = SharedScanValues[lastScanIndex];
+
+        // 末尾は単なる「最後のセル」ではなく、Up-Sweepで木のルートを保存した場所。
+        // 部分Scanでは、このグループ内で最初のセルが使用する
+        // 粒子インデックス格納配列の開始位置を0とし、
+        // そこから各セルの開始位置を順に計算する。
+        // グループ全体の粒子数は上のバッファへ退避済みなので、ここは0へ置き換えてよい。
+        SharedScanValues[lastScanIndex] = 0;
+    }
+    
+    GroupMemoryBarrierWithGroupSync();
+    
+    // Down-Sweep: 大きなセル範囲の開始位置を、左右の小さな範囲へ配る。
+    // 左側の開始位置 = 親範囲の開始位置
+    // 右側の開始位置 = 親範囲の開始位置 + 左側に含まれる粒子数
+    for (uint offset = ScanElementCount / 2; offset >= 1; offset /= 2)
+    {
+        uint scanIndex = (groupThreadId.x + 1) * offset * 2 - 1;
+        
+        if (scanIndex < ScanElementCount)
+        {
+            // 左側の部分和は、右側の開始位置を求めるため、上書き前に退避する。
+            uint temp = SharedScanValues[scanIndex - offset];
+
+            // 左側には親範囲の開始位置をそのまま渡す。
+            SharedScanValues[scanIndex - offset] = SharedScanValues[scanIndex];
+
+            // 右側には親範囲の開始位置と左側の粒子数を足した値を渡す。
+            SharedScanValues[scanIndex] += temp;
+        }
+        
+        // 現在の階層から開始位置を配り終えてから、次の細かい階層へ進む。
+        GroupMemoryBarrierWithGroupSync();
+    }
+    
+    if (firstCellIndex < _CellCount)
+    {
+        _CellParticleStartIndices[firstCellIndex] = SharedScanValues[firstLocalIndex];
+    }
+    
+    if (secondCellIndex < _CellCount)
+    {
+        _CellParticleStartIndices[secondCellIndex] = SharedScanValues[secondLocalIndex];
+    }
 }
