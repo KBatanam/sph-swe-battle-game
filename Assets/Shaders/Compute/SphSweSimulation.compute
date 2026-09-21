@@ -110,20 +110,25 @@ void ScanCellParticleCountsByGroup(uint3 groupThreadId : SV_GroupThreadID, uint3
 
     // Up-Sweep: 範囲を倍にしながら部分和を作る。
     // 部分和は、Down-Sweepで左右の範囲へ開始位置を配るために使用する。
-    for (uint offset = 1; offset < ScanElementCount; offset *= 2)
+    for (
+        uint upSweepOffset = 1;
+        upSweepOffset < ScanElementCount;
+        upSweepOffset *= 2)
     {
-        // offset * 2が現在まとめる区間の長さ。
+        // upSweepOffset * 2が現在まとめる区間の長さ。
         // この式で各スレッドが担当する区間の末尾インデックスを求める。
-        // 例: offsetが1なら1, 3, 5, ...、offsetが2なら3, 7, 11, ...となる。
-        uint scanIndex = (groupThreadId.x + 1) * offset * 2 - 1;
+        // 例: upSweepOffsetが1なら1, 3, 5, ...、2なら3, 7, 11, ...となる。
+        uint scanIndex =
+            (groupThreadId.x + 1) * upSweepOffset * 2 - 1;
         
         if (scanIndex < ScanElementCount)
         {
             // 区間の後半に保持された部分和へ、前半の部分和を加える。
-            SharedScanValues[scanIndex] += SharedScanValues[scanIndex - offset];
+            SharedScanValues[scanIndex] +=
+                SharedScanValues[scanIndex - upSweepOffset];
         }
         
-        // 現在の段階の部分和がすべて完成してから、次のoffsetへ進む。
+        // 現在の段階の部分和がすべて完成してから、次のupSweepOffsetへ進む。
         GroupMemoryBarrierWithGroupSync();
     }
     
@@ -145,17 +150,23 @@ void ScanCellParticleCountsByGroup(uint3 groupThreadId : SV_GroupThreadID, uint3
     // Down-Sweep: 大きなセル範囲の開始位置を、左右の小さな範囲へ配る。
     // 左側の開始位置 = 親範囲の開始位置
     // 右側の開始位置 = 親範囲の開始位置 + 左側に含まれる粒子数
-    for (uint offset = ScanElementCount / 2; offset >= 1; offset /= 2)
+    for (
+        uint downSweepOffset = ScanElementCount / 2;
+        downSweepOffset >= 1;
+        downSweepOffset /= 2)
     {
-        uint scanIndex = (groupThreadId.x + 1) * offset * 2 - 1;
+        uint scanIndex =
+            (groupThreadId.x + 1) * downSweepOffset * 2 - 1;
         
         if (scanIndex < ScanElementCount)
         {
             // 左側の部分和は、右側の開始位置を求めるため、上書き前に退避する。
-            uint temp = SharedScanValues[scanIndex - offset];
+            uint temp =
+                SharedScanValues[scanIndex - downSweepOffset];
 
             // 左側には親範囲の開始位置をそのまま渡す。
-            SharedScanValues[scanIndex - offset] = SharedScanValues[scanIndex];
+            SharedScanValues[scanIndex - downSweepOffset] =
+                SharedScanValues[scanIndex];
 
             // 右側には親範囲の開始位置と左側の粒子数を足した値を渡す。
             SharedScanValues[scanIndex] += temp;
