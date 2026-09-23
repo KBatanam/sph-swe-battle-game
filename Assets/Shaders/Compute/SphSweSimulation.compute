@@ -1,10 +1,16 @@
 #pragma kernel ClearCellParticleCounts
 #pragma kernel RegisterParticlesInCells
 #pragma kernel ScanCellParticleCountsByGroup
+#pragma kernel ScanCellParticleCountGroupSums
+#pragma kernel AddGroupStartIndicesToCellParticleStartIndices
+#pragma kernel InitializeCellParticleWriteIndices
+#pragma kernel SortParticleIndicesByCell
+#pragma kernel CalculateDensities
 
 #include "SphSweGpuParticle.hlsl"
+#include "SphSweKernels.hlsl"
 
-StructuredBuffer<SphSweGpuParticle> _Particles;
+RWStructuredBuffer<SphSweGpuParticle> _Particles;
 RWStructuredBuffer<uint> _ParticleCellIndices;
 RWStructuredBuffer<uint> _CellParticleCounts;
 
@@ -12,17 +18,26 @@ RWStructuredBuffer<uint> _CellParticleCounts;
 RWStructuredBuffer<uint> _CellParticleStartIndices;
 // そのグループが担当したセルの粒子数合計
 RWStructuredBuffer<uint> _CellParticleCountSumsByGroup;
+// 各Scanグループが、粒子インデックス格納配列の何番目から使用を開始するか。
+RWStructuredBuffer<uint> _CellParticleCountStartIndicesByGroup;
+// 各セルについて、次の粒子インデックスを書き込む位置。
+RWStructuredBuffer<uint> _CellParticleWriteIndices;
+// 所属セルごとに連続するよう並べた粒子インデックス。
+RWStructuredBuffer<uint> _SortedParticleIndices;
 
 uint _ParticleCount;
 uint _CellCount;
+uint _ScanGroupCount;
 
 float2 _GridMinimumPosition;
 float _GridCellSize;
 uint _GridCellCountX;
 uint _GridCellCountZ;
 
-static const uint InvalidCellIndex = 0xffffffffu;
+float _EffectiveRadius;
+float _ReferenceDensity;
 
+static const uint InvalidCellIndex = 0xffffffffu;
 static const uint ScanThreadCount = 128;
 // ここでいうセルは、近傍探索のためにシミュレーション平面を分割した正方形区画。
 // 粒子そのものではない。
@@ -73,6 +88,10 @@ void RegisterParticlesInCells(uint3 dispatchThreadId : SV_DispatchThreadID)
     InterlockedAdd(_CellParticleCounts[cellIndex], 1);
 }
 
+/// <summary>
+/// 入力：セルごとの粒子数 
+/// 出力：各セルのグループ内開始位置
+/// </summary>
 [numthreads(128, 1, 1)]
 void ScanCellParticleCountsByGroup(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
@@ -110,10 +129,7 @@ void ScanCellParticleCountsByGroup(uint3 groupThreadId : SV_GroupThreadID, uint3
 
     // Up-Sweep: 範囲を倍にしながら部分和を作る。
     // 部分和は、Down-Sweepで左右の範囲へ開始位置を配るために使用する。
-    for (
-        uint upSweepOffset = 1;
-        upSweepOffset < ScanElementCount;
-        upSweepOffset *= 2)
+    for (uint upSweepOffset = 1; upSweepOffset < ScanElementCount; upSweepOffset *= 2)
     {
         // upSweepOffset * 2が現在まとめる区間の長さ。
         // この式で各スレッドが担当する区間の末尾インデックスを求める。
@@ -150,10 +166,7 @@ void ScanCellParticleCountsByGroup(uint3 groupThreadId : SV_GroupThreadID, uint3
     // Down-Sweep: 大きなセル範囲の開始位置を、左右の小さな範囲へ配る。
     // 左側の開始位置 = 親範囲の開始位置
     // 右側の開始位置 = 親範囲の開始位置 + 左側に含まれる粒子数
-    for (
-        uint downSweepOffset = ScanElementCount / 2;
-        downSweepOffset >= 1;
-        downSweepOffset /= 2)
+    for (uint downSweepOffset = ScanElementCount / 2; downSweepOffset >= 1; downSweepOffset /= 2)
     {
         uint scanIndex =
             (groupThreadId.x + 1) * downSweepOffset * 2 - 1;
@@ -185,4 +198,202 @@ void ScanCellParticleCountsByGroup(uint3 groupThreadId : SV_GroupThreadID, uint3
     {
         _CellParticleStartIndices[secondCellIndex] = SharedScanValues[secondLocalIndex];
     }
+}
+
+/// <summary>
+/// 入力：各Scanグループの粒子数合計
+/// 出力：各Scanグループの粒子インデックス格納開始位置
+/// </summary>
+[numthreads(128, 1, 1)]
+void ScanCellParticleCountGroupSums(uint3 groupThreadId : SV_GroupThreadID)
+{
+    uint firstGroupIndex = groupThreadId.x;
+    uint secondGroupIndex = firstGroupIndex + ScanThreadCount;
+    
+    SharedScanValues[firstGroupIndex] = firstGroupIndex < _ScanGroupCount ? _CellParticleCountSumsByGroup[firstGroupIndex] : 0;
+    SharedScanValues[secondGroupIndex] = secondGroupIndex < _ScanGroupCount ? _CellParticleCountSumsByGroup[secondGroupIndex] : 0;
+    
+    GroupMemoryBarrierWithGroupSync();
+    
+    // Up-Sweep:
+    // 各Scanグループの粒子数を、より大きな範囲の合計へまとめる
+    for (uint upSweepOffset = 1; upSweepOffset < ScanElementCount; upSweepOffset *= 2)
+    {
+        uint scanIndex = (groupThreadId.x + 1) * upSweepOffset * 2 - 1;
+        
+        if (scanIndex < ScanElementCount)
+        {
+            SharedScanValues[scanIndex] += SharedScanValues[scanIndex - upSweepOffset];
+        }
+        
+        GroupMemoryBarrierWithGroupSync();
+    }
+    
+    if (groupThreadId.x == 0)
+    {
+        uint lastScanIndex = ScanElementCount - 1;
+        // 最初のScanグループは、格納配列の0番目から使用を開始する
+        SharedScanValues[lastScanIndex] = 0;
+    }
+    
+    GroupMemoryBarrierWithGroupSync();
+    
+    // Down-Sweep:
+    // 各Scanグループが使用する格納配列の開始位置を求める
+    for (uint downSweepOffset = ScanElementCount / 2; downSweepOffset >= 1; downSweepOffset /= 2)
+    {
+        uint scanIndex = (groupThreadId.x + 1) * downSweepOffset * 2 - 1;
+        
+        if (scanIndex < ScanElementCount)
+        {
+            uint leftGroupParticleCount = SharedScanValues[scanIndex - downSweepOffset];
+            SharedScanValues[scanIndex - downSweepOffset] = SharedScanValues[scanIndex];
+            SharedScanValues[scanIndex] += leftGroupParticleCount;
+        }
+        
+        GroupMemoryBarrierWithGroupSync();
+    }
+    
+    if (firstGroupIndex < _ScanGroupCount)
+    {
+        _CellParticleCountStartIndicesByGroup[firstGroupIndex] = SharedScanValues[firstGroupIndex];
+    }
+    
+    if (secondGroupIndex < _ScanGroupCount)
+    {
+        _CellParticleCountStartIndicesByGroup[secondGroupIndex] = SharedScanValues[secondGroupIndex];
+    }
+}
+
+/// <summary>
+/// 各セルのグループ内開始位置へ、そのセルが所属するScanグループの
+/// 粒子インデックス格納開始位置を加算する
+/// グループ内の開始位置をグリッド全体での開始位置へ変換している
+/// </summary>
+[numthreads(64, 1, 1)]
+void AddGroupStartIndicesToCellParticleStartIndices(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    uint cellIndex = dispatchThreadId.x;
+    
+    if (cellIndex >= _CellCount)
+    {
+        return;
+    }
+
+    uint scanGroupIndex = cellIndex / ScanElementCount;
+    
+    _CellParticleStartIndices[cellIndex] += _CellParticleCountStartIndicesByGroup[scanGroupIndex];
+}
+
+/// <summary>
+/// 各セルの次の書き込み位置を、そのセルの粒子格納開始位置で初期化する
+/// </summary>
+[numthreads(64, 1, 1)]
+void InitializeCellParticleWriteIndices(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    uint cellIndex = dispatchThreadId.x;
+    
+    if (cellIndex >= _CellCount)
+    {
+        return;
+    }
+
+    _CellParticleWriteIndices[cellIndex] = _CellParticleStartIndices[cellIndex];
+}
+
+/// <summary>
+/// 各粒子のインデックスを、所属セルに割り当てられた連続範囲へ格納する
+/// </summary>
+[numthreads(64, 1, 1)]
+void SortParticleIndicesByCell(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    uint particleIndex = dispatchThreadId.x;
+    
+    if (particleIndex >= _ParticleCount)
+    {
+        return;
+    }
+    
+    uint cellIndex = _ParticleCellIndices[particleIndex];
+    
+    if (cellIndex == InvalidCellIndex)
+    {
+        return;
+    }
+    
+    uint particleWriteIndex;
+    
+    InterlockedAdd(_CellParticleWriteIndices[cellIndex], 1, particleWriteIndex);
+    
+    _SortedParticleIndices[particleWriteIndex] = particleIndex;
+}
+
+/// <summary>
+/// 各粒子について、所属セルと周囲8セルに登録された粒子を調べ、
+/// 有効半径内の近傍粒子から密度相当量と流体深さを計算する
+/// </summary>
+[numthreads(64, 1, 1)]
+void CalculateDensities(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    uint particleIndex = dispatchThreadId.x;
+    
+    if (particleIndex >= _ParticleCount)
+    {
+        return;
+    }
+    
+    uint centerCellIndex = _ParticleCellIndices[particleIndex];
+    
+    if (centerCellIndex == InvalidCellIndex)
+    {
+        return;
+    }
+    
+    SphSweGpuParticle particle = _Particles[particleIndex];
+    
+    int centerCellCoordinateX = (int)(centerCellIndex % _GridCellCountX);
+    int centerCellCoordinateZ = (int)(centerCellIndex / _GridCellCountX);
+    
+    float density = 0.0f;
+    
+    for (int cellOffsetZ = -1; cellOffsetZ <= 1; cellOffsetZ++)
+    {
+        int neighborCellCoordinateZ = centerCellCoordinateZ + cellOffsetZ;
+        
+        if (neighborCellCoordinateZ < 0 || neighborCellCoordinateZ >= (int)_GridCellCountZ)
+        {
+            continue;
+        }
+        
+        for (int cellOffsetX = -1; cellOffsetX <= 1; cellOffsetX++)
+        {
+            int neighborCellCoordinateX = centerCellCoordinateX + cellOffsetX;
+            
+            if (neighborCellCoordinateX < 0 || neighborCellCoordinateX >= (int)_GridCellCountX)
+            {
+                continue;
+            }
+            
+            uint neighborCellIndex = (uint)neighborCellCoordinateZ * _GridCellCountX + (uint)neighborCellCoordinateX;
+            uint neighborParticleStartIndex = _CellParticleStartIndices[neighborCellIndex];
+            uint neighborParticleCount = _CellParticleCounts[neighborCellIndex];
+            
+            for (uint neighborOffset = 0; neighborOffset < neighborParticleCount; neighborOffset++)
+            {
+                uint sortedParticleIndex = neighborParticleStartIndex + neighborOffset;
+                uint neighborParticleIndex = _SortedParticleIndices[sortedParticleIndex];
+                SphSweGpuParticle neighborParticle = _Particles[neighborParticleIndex];
+                float2 positionDifference = particle.Position - neighborParticle.Position;
+                float squaredDistance = positionDifference.x * positionDifference.x + positionDifference.y * positionDifference.y;
+                
+                float kernelValue = EvaluatePoly6(squaredDistance, _EffectiveRadius);
+                
+                density += neighborParticle.Mass * kernelValue;
+            }
+        }
+    }
+    
+    particle.Density = density;
+    particle.FluidDepth = _ReferenceDensity > 0.0f ? max(0.0f, density/_ReferenceDensity) : 0.0f;
+    _Particles[particleIndex] = particle;
 }

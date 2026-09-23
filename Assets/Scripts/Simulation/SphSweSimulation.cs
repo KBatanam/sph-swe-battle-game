@@ -128,6 +128,7 @@ namespace Simulation
         public float ParticleSpacing => particleSpacing;
         public float EffectiveRadius => effectiveRadius;
         public float ParticleRadius => particleRadius;
+        public float ReferenceDensity => referenceDensity;
 
         private void Awake()
         {
