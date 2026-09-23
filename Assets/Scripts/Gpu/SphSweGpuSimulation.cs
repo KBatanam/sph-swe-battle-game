@@ -26,7 +26,7 @@ namespace Gpu
         private void Start()
         {
             ValidateReferences();
-            InitializeGpuResources();
+            InitializeKernelIndices();
             InitializeGpuResources();
         }
 
@@ -73,6 +73,7 @@ namespace Gpu
             BindBuffersToKernels();
             SetSimulationParameters();
             ExecuteDensityCalculation();
+            RequestDensityCalculationValidation();
         }
 
         private void CalculateGridBounds(SphSweParticle[] particles, float cellSize)
