@@ -22,6 +22,14 @@ namespace Gpu
         private Vector2 gridMinimumPosition;
         private int gridCellCountX;
         private int gridCellCountZ;
+        
+        [Header("Simulation Timing")]
+
+        [SerializeField, Min(0.001f)]
+        private float maximumAccumulatedSimulationTime = 0.1f;
+        
+        [SerializeField, Min(1)]
+        private int maximumSimulationSubstepCount = 20;
 
         private void Start()
         {
@@ -70,10 +78,14 @@ namespace Gpu
             }
             
             gpuBuffers.ParticleBuffer.SetData(gpuParticles);
+            var initialSimulationTimeState = new[] { new SphSweGpuSimulationTimeState() };
+            gpuBuffers.SimulationTimeStateBuffer.SetData(initialSimulationTimeState);
+            
             BindBuffersToKernels();
             SetSimulationParameters();
-            ExecuteDensityCalculation();
-            RequestDensityCalculationValidation();
+            ExecuteSimulationSubstep();
+            RequestMinimumTimeStepValidation();
+            RequestSimulationCalculationValidation();
         }
 
         private void CalculateGridBounds(SphSweParticle[] particles, float cellSize)

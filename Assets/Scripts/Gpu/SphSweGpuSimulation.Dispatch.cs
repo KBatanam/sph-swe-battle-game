@@ -48,7 +48,16 @@ namespace Gpu
             // 近傍粒子から密度と流体深さを計算
             DispatchOneDimension(calculateDensitiesKernelIndex, gpuBuffers.ParticleCount);
         }
-
+        
+        /// <summary>
+        /// 構築済みの空間グリッドと計算済みの密度を使用して、
+        /// 流体深さ勾配と粘性による全粒子の加速度を計算する。
+        /// </summary>
+        private void ExecuteAccelerationCalculation()
+        {
+            DispatchOneDimension(calculateAccelerationsKernelIndex, gpuBuffers.ParticleCount);
+        }
+        
         /// <summary>
         /// 指定された要素数を処理できるスレッドグループ数を計算し、
         /// 一次元のCompute Shaderカーネルを実行する。
@@ -76,6 +85,82 @@ namespace Gpu
             simulationComputeShader.Dispatch(
                 kernelIndex,
                 threadGroupCountX,
+                1,
+                1
+            );
+        }
+        
+        /// <summary>
+        /// 指定した時間刻みを使用し、半陰的オイラー法で
+        /// 流体粒子の速度と位置を1ステップ更新する。
+        /// </summary>
+        private void ExecuteParticleIntegration()
+        {
+            DispatchOneDimension(integrateParticlesKernelIndex, gpuBuffers.ParticleCount);
+        }
+        
+        /// <summary>
+        /// 各流体粒子のCFL条件を評価し、
+        /// 全粒子に対して安定な最小時間刻みをGPUバッファへ格納する。
+        /// </summary>
+        private void ExecuteMinimumTimeStepCalculation()
+        {
+            simulationComputeShader.Dispatch(
+                clearMinimumTimeStepKernelIndex,
+                1,
+                1,
+                1
+            );
+
+            DispatchOneDimension(calculateMinimumTimeStepKernelIndex, gpuBuffers.ParticleCount);
+        }
+        
+        /// <summary>
+        /// 現在のGPU粒子状態から密度、加速度、CFL時間刻みを順番に計算し、
+        /// 求めた時間刻みを使用して速度と位置を1サブステップ進める。
+        /// 各処理は前段階の結果に依存するため、実行順を変更してはならない。
+        /// </summary>
+        private void ExecuteSimulationSubstep()
+        {
+            ExecuteDensityCalculation();
+            ExecuteAccelerationCalculation();
+            ExecuteMinimumTimeStepCalculation();
+            ExecuteParticleIntegration();
+        }
+        
+        /// <summary>
+        /// 描画フレームの経過時間をGPU側へ蓄積し、
+        /// このフレームのサブステップ管理情報を初期化する。
+        /// </summary>
+        private void ExecuteBeginSimulationFrame(float frameDeltaTime)
+        {
+            simulationComputeShader.SetFloat(
+                FrameDeltaTimePropertyId,
+                frameDeltaTime
+            );
+
+            simulationComputeShader.SetFloat(
+                MaximumAccumulatedSimulationTimePropertyId,
+                maximumAccumulatedSimulationTime
+            );
+
+            simulationComputeShader.Dispatch(
+                beginSimulationFrameKernelIndex,
+                1,
+                1,
+                1
+            );
+        }
+        
+        /// <summary>
+        /// GPU側に残っている未処理時間と実行済み回数から、
+        /// 次のサブステップを実行するか判定する。
+        /// </summary>
+        private void ExecuteBeginSimulationSubstep()
+        {
+            simulationComputeShader.Dispatch(
+                beginSimulationSubstepKernelIndex,
+                1,
                 1,
                 1
             );

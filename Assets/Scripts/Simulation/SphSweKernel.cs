@@ -64,9 +64,7 @@ namespace Simulation
         /// <param name="effectiveRadius">
         /// カーネルの有効半径。
         /// </param>
-        public static Vector2 EvaluateSpikyGradient(
-            Vector2 positionDifference,
-            float effectiveRadius)
+        public static Vector2 EvaluateSpikyGradient(Vector2 positionDifference, float effectiveRadius)
         {
             if (effectiveRadius <= 0f)
             {

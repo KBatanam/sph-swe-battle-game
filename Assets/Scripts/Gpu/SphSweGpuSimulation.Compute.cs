@@ -22,7 +22,22 @@ namespace Gpu
         private static readonly int GridCellCountZPropertyId = Shader.PropertyToID("_GridCellCountZ");
         private static readonly int EffectiveRadiusPropertyId = Shader.PropertyToID("_EffectiveRadius");
         private static readonly int ReferenceDensityPropertyId = Shader.PropertyToID("_ReferenceDensity");
-
+        
+        private static readonly int GravityAccelerationPropertyId = Shader.PropertyToID("_GravityAcceleration");
+        private static readonly int ViscosityCoefficientPropertyId = Shader.PropertyToID("_ViscosityCoefficient");
+        
+        private static readonly int SimulationMinimumPositionPropertyId = Shader.PropertyToID("_SimulationMinimumPosition");
+        private static readonly int SimulationMaximumPositionPropertyId = Shader.PropertyToID("_SimulationMaximumPosition");
+        
+        private static readonly int MinimumTimeStepBitsPropertyId = Shader.PropertyToID("_MinimumTimeStepBits");
+        private static readonly int CourantNumberPropertyId = Shader.PropertyToID("_CourantNumber");
+        private static readonly int MaximumSimulationTimeStepPropertyId = Shader.PropertyToID("_MaximumSimulationTimeStep");
+        
+        private static readonly int SimulationTimeStatePropertyId = Shader.PropertyToID("_SimulationTimeState");
+        private static readonly int FrameDeltaTimePropertyId = Shader.PropertyToID("_FrameDeltaTime");
+        private static readonly int MaximumAccumulatedSimulationTimePropertyId = Shader.PropertyToID("_MaximumAccumulatedSimulationTime");
+        private static readonly int MaximumSimulationSubstepCountPropertyId = Shader.PropertyToID("_MaximumSimulationSubstepCount");
+        
         private int clearCellParticleCountsKernelIndex;
         private int registerParticlesInCellsKernelIndex;
         private int scanCellParticleCountsByGroupKernelIndex;
@@ -31,9 +46,17 @@ namespace Gpu
         private int initializeCellParticleWriteIndicesKernelIndex;
         private int sortParticleIndicesByCellKernelIndex;
         private int calculateDensitiesKernelIndex;
+        private int calculateAccelerationsKernelIndex;
+        private int integrateParticlesKernelIndex;
+        private int clearMinimumTimeStepKernelIndex;
+        private int calculateMinimumTimeStepKernelIndex;
+        private int beginSimulationFrameKernelIndex;
+        private int beginSimulationSubstepKernelIndex;
 
         private void InitializeKernelIndices()
         {
+            beginSimulationFrameKernelIndex = simulationComputeShader.FindKernel("BeginSimulationFrame");
+            beginSimulationSubstepKernelIndex = simulationComputeShader.FindKernel("BeginSimulationSubstep");
             clearCellParticleCountsKernelIndex = simulationComputeShader.FindKernel("ClearCellParticleCounts");
             registerParticlesInCellsKernelIndex = simulationComputeShader.FindKernel("RegisterParticlesInCells");
             scanCellParticleCountsByGroupKernelIndex = simulationComputeShader.FindKernel("ScanCellParticleCountsByGroup");
@@ -42,6 +65,10 @@ namespace Gpu
             initializeCellParticleWriteIndicesKernelIndex = simulationComputeShader.FindKernel("InitializeCellParticleWriteIndices");
             sortParticleIndicesByCellKernelIndex = simulationComputeShader.FindKernel("SortParticleIndicesByCell");
             calculateDensitiesKernelIndex = simulationComputeShader.FindKernel("CalculateDensities");
+            calculateAccelerationsKernelIndex = simulationComputeShader.FindKernel("CalculateAccelerations");
+            integrateParticlesKernelIndex = simulationComputeShader.FindKernel("IntegrateParticles");
+            clearMinimumTimeStepKernelIndex = simulationComputeShader.FindKernel("ClearMinimumTimeStep");
+            calculateMinimumTimeStepKernelIndex = simulationComputeShader.FindKernel("CalculateMinimumTimeStep");
         }
 
         /// <summary>
@@ -52,12 +79,26 @@ namespace Gpu
         /// </summary>
         private void BindBuffersToKernels()
         {
+            BindSimulationTimeStateBuffer(beginSimulationFrameKernelIndex);
+            BindSimulationTimeStateBuffer(beginSimulationSubstepKernelIndex);
+            BindSimulationTimeStateBuffer(clearCellParticleCountsKernelIndex);
+            BindSimulationTimeStateBuffer(registerParticlesInCellsKernelIndex);
+            BindSimulationTimeStateBuffer(scanCellParticleCountsByGroupKernelIndex);
+            BindSimulationTimeStateBuffer(scanCellParticleCountGroupSumsKernelIndex);
+            BindSimulationTimeStateBuffer(addGroupStartIndicesKernelIndex);
+            BindSimulationTimeStateBuffer(initializeCellParticleWriteIndicesKernelIndex);
+            BindSimulationTimeStateBuffer(sortParticleIndicesByCellKernelIndex);
+            BindSimulationTimeStateBuffer(calculateDensitiesKernelIndex);
+            BindSimulationTimeStateBuffer(calculateAccelerationsKernelIndex);
+            BindSimulationTimeStateBuffer(clearMinimumTimeStepKernelIndex);
+            BindSimulationTimeStateBuffer(calculateMinimumTimeStepKernelIndex);
+            BindSimulationTimeStateBuffer(integrateParticlesKernelIndex);
+            
             simulationComputeShader.SetBuffer(
                 clearCellParticleCountsKernelIndex,
                 CellParticleCountsPropertyId,
                 gpuBuffers.CellParticleCountBuffer
             );
-
             simulationComputeShader.SetBuffer(
                 registerParticlesInCellsKernelIndex,
                 ParticlesPropertyId,
@@ -73,7 +114,6 @@ namespace Gpu
                 CellParticleCountsPropertyId,
                 gpuBuffers.CellParticleCountBuffer
             );
-
             simulationComputeShader.SetBuffer(
                 scanCellParticleCountsByGroupKernelIndex,
                 CellParticleCountsPropertyId,
@@ -89,7 +129,6 @@ namespace Gpu
                 CellParticleCountSumsByGroupPropertyId,
                 gpuBuffers.CellParticleCountSumByGroupBuffer
             );
-
             simulationComputeShader.SetBuffer(
                 scanCellParticleCountGroupSumsKernelIndex,
                 CellParticleCountSumsByGroupPropertyId,
@@ -100,7 +139,6 @@ namespace Gpu
                 CellParticleCountStartIndicesByGroupPropertyId,
                 gpuBuffers.CellParticleCountStartIndexByGroupBuffer
             );
-
             simulationComputeShader.SetBuffer(
                 addGroupStartIndicesKernelIndex,
                 CellParticleStartIndicesPropertyId,
@@ -111,7 +149,6 @@ namespace Gpu
                 CellParticleCountStartIndicesByGroupPropertyId,
                 gpuBuffers.CellParticleCountStartIndexByGroupBuffer
             );
-
             simulationComputeShader.SetBuffer(
                 initializeCellParticleWriteIndicesKernelIndex,
                 CellParticleStartIndicesPropertyId,
@@ -122,7 +159,6 @@ namespace Gpu
                 CellParticleWriteIndicesPropertyId,
                 gpuBuffers.CellParticleWriteIndexBuffer
             );
-
             simulationComputeShader.SetBuffer(
                 sortParticleIndicesByCellKernelIndex,
                 ParticleCellIndicesPropertyId,
@@ -138,7 +174,6 @@ namespace Gpu
                 SortedParticleIndicesPropertyId,
                 gpuBuffers.SortedParticleIndexBuffer
             );
-
             simulationComputeShader.SetBuffer(
                 calculateDensitiesKernelIndex,
                 ParticlesPropertyId,
@@ -163,6 +198,56 @@ namespace Gpu
                 calculateDensitiesKernelIndex,
                 SortedParticleIndicesPropertyId,
                 gpuBuffers.SortedParticleIndexBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                calculateAccelerationsKernelIndex,
+                ParticlesPropertyId,
+                gpuBuffers.ParticleBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                calculateAccelerationsKernelIndex,
+                ParticleCellIndicesPropertyId,
+                gpuBuffers.ParticleCellIndexBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                calculateAccelerationsKernelIndex,
+                CellParticleCountsPropertyId,
+                gpuBuffers.CellParticleCountBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                calculateAccelerationsKernelIndex,
+                CellParticleStartIndicesPropertyId,
+                gpuBuffers.CellParticleStartIndexBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                calculateAccelerationsKernelIndex,
+                SortedParticleIndicesPropertyId,
+                gpuBuffers.SortedParticleIndexBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                integrateParticlesKernelIndex,
+                ParticlesPropertyId,
+                gpuBuffers.ParticleBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                integrateParticlesKernelIndex,
+                MinimumTimeStepBitsPropertyId,
+                gpuBuffers.MinimumTimeStepBitsBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                calculateMinimumTimeStepKernelIndex,
+                ParticlesPropertyId,
+                gpuBuffers.ParticleBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                calculateMinimumTimeStepKernelIndex,
+                MinimumTimeStepBitsPropertyId,
+                gpuBuffers.MinimumTimeStepBitsBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                clearMinimumTimeStepKernelIndex,
+                MinimumTimeStepBitsPropertyId,
+                gpuBuffers.MinimumTimeStepBitsBuffer
             );
         }
         
@@ -172,6 +257,7 @@ namespace Gpu
         /// </summary>
         private void SetSimulationParameters()
         {
+            simulationComputeShader.SetInt(MaximumSimulationSubstepCountPropertyId, maximumSimulationSubstepCount);
             simulationComputeShader.SetInt(ParticleCountPropertyId, gpuBuffers.ParticleCount);
             simulationComputeShader.SetInt(CellCountPropertyId, gpuBuffers.CellCount);
             simulationComputeShader.SetInt(ScanGroupCountPropertyId, gpuBuffers.ScanGroupCount);
@@ -181,6 +267,27 @@ namespace Gpu
             simulationComputeShader.SetInt(GridCellCountZPropertyId, gridCellCountZ);
             simulationComputeShader.SetFloat(EffectiveRadiusPropertyId, sourceSimulation.EffectiveRadius);
             simulationComputeShader.SetFloat(ReferenceDensityPropertyId, sourceSimulation.ReferenceDensity);
+            simulationComputeShader.SetFloat(GravityAccelerationPropertyId, sourceSimulation.GravityAcceleration);
+            simulationComputeShader.SetFloat(ViscosityCoefficientPropertyId, sourceSimulation.ViscosityCoefficient);
+            
+            var halfSimulationAreaSize = sourceSimulation.SimulationAreaSize * 0.5f;
+            var simulationMinimumPosition = sourceSimulation.SimulationCenter - halfSimulationAreaSize;
+            var simulationMaximumPosition = sourceSimulation.SimulationCenter + halfSimulationAreaSize;
+
+            simulationComputeShader.SetVector(SimulationMinimumPositionPropertyId, simulationMinimumPosition);
+            simulationComputeShader.SetVector(SimulationMaximumPositionPropertyId, simulationMaximumPosition);
+            
+            simulationComputeShader.SetFloat(CourantNumberPropertyId, sourceSimulation.CourantNumber);
+            simulationComputeShader.SetFloat(MaximumSimulationTimeStepPropertyId, sourceSimulation.MaximumSimulationTimeStep);
+        }
+        
+        private void BindSimulationTimeStateBuffer(int kernelIndex)
+        {
+            simulationComputeShader.SetBuffer(
+                kernelIndex,
+                SimulationTimeStatePropertyId,
+                gpuBuffers.SimulationTimeStateBuffer
+            );
         }
     }
 }

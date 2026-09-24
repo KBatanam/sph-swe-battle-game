@@ -26,6 +26,9 @@ namespace Simulation
         private int lastCompletedSimulationSubstepCount;
         private float lastRequestedSimulationTime;
         private float lastSimulatedTime;
+        
+        public float CourantNumber => courantNumber;
+        public float MaximumSimulationTimeStep => maximumSimulationTimeStep;
 
         private void Update()
         {

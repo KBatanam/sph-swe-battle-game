@@ -1,3 +1,5 @@
+#pragma kernel BeginSimulationFrame
+#pragma kernel BeginSimulationSubstep
 #pragma kernel ClearCellParticleCounts
 #pragma kernel RegisterParticlesInCells
 #pragma kernel ScanCellParticleCountsByGroup
@@ -6,8 +8,13 @@
 #pragma kernel InitializeCellParticleWriteIndices
 #pragma kernel SortParticleIndicesByCell
 #pragma kernel CalculateDensities
+#pragma kernel CalculateAccelerations
+#pragma kernel IntegrateParticles
+#pragma kernel ClearMinimumTimeStep
+#pragma kernel CalculateMinimumTimeStep
 
 #include "SphSweGpuParticle.hlsl"
+#include "SphSweGpuSimulationTimeState.hlsl"
 #include "SphSweKernels.hlsl"
 
 RWStructuredBuffer<SphSweGpuParticle> _Particles;
@@ -24,6 +31,14 @@ RWStructuredBuffer<uint> _CellParticleCountStartIndicesByGroup;
 RWStructuredBuffer<uint> _CellParticleWriteIndices;
 // 所属セルごとに連続するよう並べた粒子インデックス。
 RWStructuredBuffer<uint> _SortedParticleIndices;
+// 全流体粒子のCFL条件から求めた最小時間刻みを、正のfloatのビット表現で保持する。
+// floatのままだとInterlockedMinに渡せないため
+RWStructuredBuffer<uint> _MinimumTimeStepBits;
+RWStructuredBuffer<SphSweGpuSimulationTimeState> _SimulationTimeState;
+
+float _FrameDeltaTime;
+float _MaximumAccumulatedSimulationTime;
+uint _MaximumSimulationSubstepCount;
 
 uint _ParticleCount;
 uint _CellCount;
@@ -36,8 +51,17 @@ uint _GridCellCountZ;
 
 float _EffectiveRadius;
 float _ReferenceDensity;
+float _GravityAcceleration;
+float _ViscosityCoefficient;
+
+float2 _SimulationMinimumPosition;
+float2 _SimulationMaximumPosition;
+
+float _CourantNumber;
+float _MaximumSimulationTimeStep;
 
 static const uint InvalidCellIndex = 0xffffffffu;
+static const int BoundaryParticleType = 1;
 static const uint ScanThreadCount = 128;
 // ここでいうセルは、近傍探索のためにシミュレーション平面を分割した正方形区画。
 // 粒子そのものではない。
@@ -48,10 +72,69 @@ static const uint ScanElementCount = ScanThreadCount * 2;
 
 // groupsharedは同じスレッドグループ内で共有される一時メモリ
 groupshared uint SharedScanValues[256];
+groupshared float SharedMinimumTimeSteps[64];
+
+/// <summary>
+/// 現在予約されているサブステップが実行不要か判定する。
+/// </summary>
+bool IsSimulationSubstepInactive()
+{
+    return _SimulationTimeState[0].IsSimulationSubstepActive == 0u;
+}
+
+/// <summary>
+/// 描画フレームの経過時間を未処理のシミュレーション時間へ加算し、
+/// このフレームで使用するサブステップ管理情報を初期化する。
+/// </summary>
+[numthreads(1, 1, 1)]
+void BeginSimulationFrame(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    SphSweGpuSimulationTimeState simulationTimeState = _SimulationTimeState[0];
+
+    simulationTimeState.AccumulatedSimulationTime = min(
+        simulationTimeState.AccumulatedSimulationTime
+            + max(0.0f, _FrameDeltaTime),
+        _MaximumAccumulatedSimulationTime
+    );
+
+    simulationTimeState.CurrentSimulationTimeStep = 0.0f;
+    simulationTimeState.CompletedSubstepCount = 0u;
+    simulationTimeState.IsSimulationSubstepActive = simulationTimeState.AccumulatedSimulationTime > 0.0f ? 1u : 0u;
+
+    _SimulationTimeState[0] = simulationTimeState;
+}
+
+/// <summary>
+/// 未処理のシミュレーション時間と実行済み回数を確認し、
+/// 次のサブステップを実行するか決定する。
+/// CFL条件による実際の時間刻みは、この後の計算で決定する。
+/// </summary>
+[numthreads(1, 1, 1)]
+void BeginSimulationSubstep(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    SphSweGpuSimulationTimeState simulationTimeState = _SimulationTimeState[0];
+
+    bool hasRemainingSimulationTime = simulationTimeState.AccumulatedSimulationTime > 0.0f;
+
+    bool hasRemainingSubstepCapacity = simulationTimeState.CompletedSubstepCount < _MaximumSimulationSubstepCount;
+
+    simulationTimeState.CurrentSimulationTimeStep = 0.0f;
+    simulationTimeState.IsSimulationSubstepActive =
+        hasRemainingSimulationTime && hasRemainingSubstepCapacity
+            ? 1u
+            : 0u;
+
+    _SimulationTimeState[0] = simulationTimeState;
+}
 
 [numthreads(64, 1, 1)]
 void ClearCellParticleCounts(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
+    if (IsSimulationSubstepInactive())
+    {
+        return;
+    }
+    
     uint cellIndex = dispatchThreadId.x;
 
     if (cellIndex >= _CellCount)
@@ -65,6 +148,11 @@ void ClearCellParticleCounts(uint3 dispatchThreadId : SV_DispatchThreadID)
 [numthreads(64, 1, 1)]
 void RegisterParticlesInCells(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
+    if (IsSimulationSubstepInactive())
+    {
+        return;
+    }
+    
     uint particleIndex = dispatchThreadId.x;
     
     if (particleIndex >= _ParticleCount)
@@ -95,6 +183,11 @@ void RegisterParticlesInCells(uint3 dispatchThreadId : SV_DispatchThreadID)
 [numthreads(128, 1, 1)]
 void ScanCellParticleCountsByGroup(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
+    if (IsSimulationSubstepInactive())
+    {
+        return;
+    }
+    
     /*
     128スレッドの各スレッドに、256セルの前半から1個、後半から1個を割り当て、
     さらにグループ番号を使ってグリッド全体のセル番号へ変換
@@ -207,6 +300,11 @@ void ScanCellParticleCountsByGroup(uint3 groupThreadId : SV_GroupThreadID, uint3
 [numthreads(128, 1, 1)]
 void ScanCellParticleCountGroupSums(uint3 groupThreadId : SV_GroupThreadID)
 {
+    if (IsSimulationSubstepInactive())
+    {
+        return;
+    }
+    
     uint firstGroupIndex = groupThreadId.x;
     uint secondGroupIndex = firstGroupIndex + ScanThreadCount;
     
@@ -273,6 +371,11 @@ void ScanCellParticleCountGroupSums(uint3 groupThreadId : SV_GroupThreadID)
 [numthreads(64, 1, 1)]
 void AddGroupStartIndicesToCellParticleStartIndices(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
+    if (IsSimulationSubstepInactive())
+    {
+        return;
+    }
+    
     uint cellIndex = dispatchThreadId.x;
     
     if (cellIndex >= _CellCount)
@@ -291,6 +394,11 @@ void AddGroupStartIndicesToCellParticleStartIndices(uint3 dispatchThreadId : SV_
 [numthreads(64, 1, 1)]
 void InitializeCellParticleWriteIndices(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
+    if (IsSimulationSubstepInactive())
+    {
+        return;
+    }
+    
     uint cellIndex = dispatchThreadId.x;
     
     if (cellIndex >= _CellCount)
@@ -307,6 +415,11 @@ void InitializeCellParticleWriteIndices(uint3 dispatchThreadId : SV_DispatchThre
 [numthreads(64, 1, 1)]
 void SortParticleIndicesByCell(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
+    if (IsSimulationSubstepInactive())
+    {
+        return;
+    }
+    
     uint particleIndex = dispatchThreadId.x;
     
     if (particleIndex >= _ParticleCount)
@@ -335,6 +448,11 @@ void SortParticleIndicesByCell(uint3 dispatchThreadId : SV_DispatchThreadID)
 [numthreads(64, 1, 1)]
 void CalculateDensities(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
+    if (IsSimulationSubstepInactive())
+    {
+        return;
+    }
+    
     uint particleIndex = dispatchThreadId.x;
     
     if (particleIndex >= _ParticleCount)
@@ -396,4 +514,236 @@ void CalculateDensities(uint3 dispatchThreadId : SV_DispatchThreadID)
     particle.Density = density;
     particle.FluidDepth = _ReferenceDensity > 0.0f ? max(0.0f, density/_ReferenceDensity) : 0.0f;
     _Particles[particleIndex] = particle;
+}
+
+/// <summary>
+/// 有効半径内の近傍粒子から、流体深さ勾配と粘性による加速度を計算する。
+/// 境界粒子は加速度をゼロ
+/// </summary>
+[numthreads(64, 1, 1)]
+void CalculateAccelerations(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    if (IsSimulationSubstepInactive())
+    {
+        return;
+    }
+    
+    uint particleIndex = dispatchThreadId.x;
+    
+    if (particleIndex >= _ParticleCount)
+    {
+        return;
+    }
+    
+    SphSweGpuParticle particle = _Particles[particleIndex];
+    
+    if (particle.Type == BoundaryParticleType)
+    {
+        particle.Acceleration = float2(0.0f, 0.0f);
+        _Particles[particleIndex] = particle;
+        return;
+    }
+    
+    uint centerCellIndex = _ParticleCellIndices[particleIndex];
+    
+    if (centerCellIndex == InvalidCellIndex)
+    {
+        particle.Acceleration = float2(0.0f, 0.0f);
+        _Particles[particleIndex] = particle;
+        return;
+    }
+    
+    int centerCellCoordinateX = (int)(centerCellIndex % _GridCellCountX);
+    int centerCellCoordinateZ = (int)(centerCellIndex / _GridCellCountX);
+    
+    float2 fluidDepthGradientAcceleration = float2(0.0f, 0.0f);
+    float2 viscosityAcceleration = float2(0.0f, 0.0f);
+    float fluidDepthGradientAccelerationScale = _ReferenceDensity > 0.0f
+        ? -_GravityAcceleration / _ReferenceDensity : 0.0f;
+    
+    for (int cellOffsetZ = -1; cellOffsetZ <= 1; cellOffsetZ++)
+    {
+        int neighborCellCoordinateZ = centerCellCoordinateZ + cellOffsetZ;
+
+        if (neighborCellCoordinateZ < 0 || neighborCellCoordinateZ >= (int)_GridCellCountZ)
+        {
+            continue;
+        }
+
+        for (int cellOffsetX = -1; cellOffsetX <= 1; cellOffsetX++)
+        {
+            int neighborCellCoordinateX = centerCellCoordinateX + cellOffsetX;
+
+            if (neighborCellCoordinateX < 0 || neighborCellCoordinateX >= (int)_GridCellCountX)
+            {
+                continue;
+            }
+            
+            uint neighborCellIndex = (uint)neighborCellCoordinateZ * _GridCellCountX + (uint)neighborCellCoordinateX;
+            uint neighborParticleStartIndex = _CellParticleStartIndices[neighborCellIndex];
+            uint neighborParticleCount = _CellParticleCounts[neighborCellIndex];
+            
+            for (uint neighborOffset = 0; neighborOffset < neighborParticleCount; neighborOffset++)
+            {
+                uint sortedParticleIndex = neighborParticleStartIndex + neighborOffset;
+                uint neighborParticleIndex = _SortedParticleIndices[sortedParticleIndex];
+                
+                if (particleIndex == neighborParticleIndex)
+                {
+                    continue;
+                }
+                
+                SphSweGpuParticle neighborParticle = _Particles[neighborParticleIndex];
+                float2 positionDifference = particle.Position - neighborParticle.Position;
+                float squaredDistance = positionDifference.x * positionDifference.x + positionDifference.y * positionDifference.y;
+                float2 spikyGradient = EvaluateSpikyGradient(positionDifference, _EffectiveRadius);
+
+                fluidDepthGradientAcceleration +=
+                    fluidDepthGradientAccelerationScale
+                    * neighborParticle.Mass
+                    * spikyGradient
+                    * 2.0f;
+
+                if (particle.Density <= 0.0f || neighborParticle.Density <= 0.0f)
+                {
+                    continue;
+                }
+
+                float viscosityLaplacian = EvaluateViscosityLaplacian(squaredDistance, _EffectiveRadius);
+                float2 velocityDifference = neighborParticle.Velocity - particle.Velocity;
+
+                viscosityAcceleration +=
+                    _ViscosityCoefficient
+                    / particle.Density
+                    * neighborParticle.Mass
+                    * velocityDifference
+                    / neighborParticle.Density
+                    * viscosityLaplacian
+                    * 2.0f;
+            }
+        }
+    }
+    
+    particle.Acceleration = fluidDepthGradientAcceleration + viscosityAcceleration;
+    _Particles[particleIndex] = particle;
+}
+
+/// <summary>
+/// 半陰的オイラー法で流体粒子の速度と位置を更新する。
+/// 更新後の速度を浅水波の伝播速度以下へ制限し、
+/// 更新後の位置をシミュレーション領域内へ制限する。
+/// 境界粒子は固定するため更新しない。
+/// </summary>
+[numthreads(64, 1, 1)]
+void IntegrateParticles(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    if (IsSimulationSubstepInactive())
+    {
+        return;
+    }
+    
+    uint particleIndex = dispatchThreadId.x;
+    float simulationDeltaTime = asfloat(_MinimumTimeStepBits[0]);
+
+    if (particleIndex >= _ParticleCount || simulationDeltaTime <= 0.0f)
+    {
+        return;
+    }
+
+    SphSweGpuParticle particle = _Particles[particleIndex];
+
+    if (particle.Type == BoundaryParticleType)
+    {
+        return;
+    }
+
+    particle.Velocity += particle.Acceleration * simulationDeltaTime;
+
+    float maximumAllowedVelocity = sqrt(max(0.0f, _GravityAcceleration * particle.FluidDepth));
+    float squaredVelocity = particle.Velocity.x * particle.Velocity.x + particle.Velocity.y * particle.Velocity.y;
+    float squaredMaximumAllowedVelocity = maximumAllowedVelocity * maximumAllowedVelocity;
+
+    if (squaredVelocity > squaredMaximumAllowedVelocity && squaredVelocity > 0.0f)
+    {
+        float velocityScale = maximumAllowedVelocity / sqrt(squaredVelocity);
+        particle.Velocity *= velocityScale;
+    }
+
+    particle.Position += particle.Velocity * simulationDeltaTime;
+    particle.Position = clamp(particle.Position, _SimulationMinimumPosition, _SimulationMaximumPosition);
+    _Particles[particleIndex] = particle;
+}
+
+/// <summary>
+/// CFL時間刻みの最小値を、設定された最大時間刻みで初期化する。
+/// </summary>
+[numthreads(1, 1, 1)]
+void ClearMinimumTimeStep(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    if (IsSimulationSubstepInactive())
+    {
+        return;
+    }
+    
+    _MinimumTimeStepBits[0] = asuint(_MaximumSimulationTimeStep);
+}
+
+/// <summary>
+/// 各流体粒子のCFL時間刻みを並列計算し、
+/// グループ内Reductionとアトミック最小値更新によって全粒子の最小値を求める。
+/// </summary>
+[numthreads(64, 1, 1)]
+void CalculateMinimumTimeStep(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupThreadId : SV_GroupThreadID)
+{
+    if (IsSimulationSubstepInactive())
+    {
+        return;
+    }
+    
+    uint particleIndex = dispatchThreadId.x;
+    uint localThreadIndex = groupThreadId.x;
+    float particleTimeStep = _MaximumSimulationTimeStep;
+    
+    if (particleIndex < _ParticleCount)
+    {
+        SphSweGpuParticle particle = _Particles[particleIndex];
+        
+        if (particle.Type != BoundaryParticleType)
+        {
+            float squaredVelocity = particle.Velocity.x * particle.Velocity.x + particle.Velocity.y * particle.Velocity.y;
+            float velocityMagnitude = sqrt(max(0.0f, squaredVelocity));
+            float shallowWaterWaveSpeed = sqrt(max(0.0f, _GravityAcceleration * particle.FluidDepth));
+            float maximumSignalSpeed = velocityMagnitude + shallowWaterWaveSpeed;
+            
+            if (maximumSignalSpeed > 0.0f)
+            {
+                particleTimeStep = min(
+                    _MaximumSimulationTimeStep,
+                    _CourantNumber * _EffectiveRadius / maximumSignalSpeed
+                );
+            }
+        }
+    }
+    
+    
+    SharedMinimumTimeSteps[localThreadIndex] = particleTimeStep;
+    GroupMemoryBarrierWithGroupSync();
+    
+    for (uint reductionStride = 32; reductionStride > 0; reductionStride /= 2)
+    {
+        if (localThreadIndex < reductionStride)
+        {
+            SharedMinimumTimeSteps[localThreadIndex] = min(
+                SharedMinimumTimeSteps[localThreadIndex],
+                SharedMinimumTimeSteps[localThreadIndex + reductionStride]
+            );
+        }
+
+        GroupMemoryBarrierWithGroupSync();
+    }
+    
+    if (localThreadIndex == 0)
+    {
+        InterlockedMin(_MinimumTimeStepBits[0], asuint(SharedMinimumTimeSteps[0]));
+    }
 }

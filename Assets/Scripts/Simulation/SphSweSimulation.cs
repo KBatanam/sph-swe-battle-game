@@ -129,6 +129,10 @@ namespace Simulation
         public float EffectiveRadius => effectiveRadius;
         public float ParticleRadius => particleRadius;
         public float ReferenceDensity => referenceDensity;
+        public float GravityAcceleration => gravityAcceleration;
+        public float ViscosityCoefficient => viscosityCoefficient;
+        public Vector2 SimulationCenter => simulationCenter;
+        public Vector2 SimulationAreaSize => simulationAreaSize;
 
         private void Awake()
         {
