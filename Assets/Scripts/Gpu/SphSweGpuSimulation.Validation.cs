@@ -9,6 +9,255 @@ namespace Gpu
     public sealed partial class SphSweGpuSimulation
     {
         /// <summary>
+        /// 連続GPUシミュレーション後の粒子を一度だけ非同期で読み戻し、
+        /// 数値の有限性、流体粒子の領域制限および境界粒子の固定を検証する。
+        /// </summary>
+        [System.Diagnostics.Conditional("UNITY_EDITOR")]
+        private void RequestContinuousSimulationParticleValidation()
+        {
+            if (continuousSimulationParticleValidationRequested)
+            {
+                return;
+            }
+
+            continuousSimulationParticleValidationRequested = true;
+
+            var sourceParticles = sourceSimulation.Particles;
+            var initialPositions = new Vector2[sourceParticles.Length];
+
+            for (var particleIndex = 0; particleIndex < sourceParticles.Length; particleIndex++)
+            {
+                initialPositions[particleIndex] = sourceParticles[particleIndex].Position;
+            }
+
+            var halfSimulationAreaSize = sourceSimulation.SimulationAreaSize * 0.5f;
+            var simulationMinimumPosition = sourceSimulation.SimulationCenter - halfSimulationAreaSize;
+            var simulationMaximumPosition = sourceSimulation.SimulationCenter + halfSimulationAreaSize;
+
+            AsyncGPUReadback.Request(
+                gpuBuffers.ParticleBuffer,
+                request => ValidateContinuousSimulationParticles(
+                    request,
+                    sourceParticles,
+                    initialPositions,
+                    simulationMinimumPosition,
+                    simulationMaximumPosition
+                )
+            );
+        }
+
+        private void ValidateContinuousSimulationParticles(
+            AsyncGPUReadbackRequest request,
+            SphSweParticle[] sourceParticles,
+            Vector2[] initialPositions,
+            Vector2 simulationMinimumPosition,
+            Vector2 simulationMaximumPosition)
+        {
+            if (request.hasError)
+            {
+                Debug.LogError("Failed to read continuously simulated GPU particles.", this);
+                return;
+            }
+
+            var gpuParticles = request.GetData<SphSweGpuParticle>();
+
+            if (gpuParticles.Length != sourceParticles.Length)
+            {
+                Debug.LogError(
+                    ZString.Format(
+                        "GPU particle count was {0}, but {1} was expected during continuous simulation validation.",
+                        gpuParticles.Length,
+                        sourceParticles.Length
+                    ),
+                    this
+                );
+                return;
+            }
+
+            var movedFluidParticleCount = 0;
+
+            for (var particleIndex = 0; particleIndex < gpuParticles.Length; particleIndex++)
+            {
+                var gpuParticle = gpuParticles[particleIndex];
+                var sourceParticle = sourceParticles[particleIndex];
+
+                if (!IsFinite(gpuParticle.Position)
+                    || !IsFinite(gpuParticle.Velocity)
+                    || !IsFinite(gpuParticle.Acceleration)
+                    || !IsFinite(gpuParticle.Density)
+                    || !IsFinite(gpuParticle.FluidDepth))
+                {
+                    Debug.LogError(
+                        ZString.Format(
+                            "GPU particle {0} contained a non-finite value after continuous simulation.",
+                            particleIndex
+                        ),
+                        this
+                    );
+                    return;
+                }
+
+                if (sourceParticle.Type == SphSweParticleType.Boundary)
+                {
+                    if (!AreApproximatelyEqual(gpuParticle.Position, initialPositions[particleIndex])
+                        || !AreApproximatelyEqual(gpuParticle.Velocity, Vector2.zero))
+                    {
+                        Debug.LogError(
+                            ZString.Format(
+                                "GPU boundary particle {0} moved during continuous simulation.",
+                                particleIndex
+                            ),
+                            this
+                        );
+                        return;
+                    }
+
+                    continue;
+                }
+
+                var isInsideSimulationArea =
+                    gpuParticle.Position.x >= simulationMinimumPosition.x
+                    && gpuParticle.Position.x <= simulationMaximumPosition.x
+                    && gpuParticle.Position.y >= simulationMinimumPosition.y
+                    && gpuParticle.Position.y <= simulationMaximumPosition.y;
+
+                if (!isInsideSimulationArea)
+                {
+                    Debug.LogError(
+                        ZString.Format(
+                            "GPU fluid particle {0} moved outside the simulation area.",
+                            particleIndex
+                        ),
+                        this
+                    );
+                    return;
+                }
+
+                if (!AreApproximatelyEqual(gpuParticle.Position, initialPositions[particleIndex])
+                    || !AreApproximatelyEqual(gpuParticle.Velocity, Vector2.zero))
+                {
+                    movedFluidParticleCount++;
+                }
+            }
+
+            Debug.Log(
+                ZString.Format(
+                    "GPU continuous particle validation passed. Particle count: {0}, moved fluid particles: {1}.",
+                    gpuParticles.Length,
+                    movedFluidParticleCount
+                ),
+                this
+            );
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
+        }
+
+        private static bool IsFinite(Vector2 value)
+        {
+            return IsFinite(value.x) && IsFinite(value.y);
+        }
+
+        /// <summary>
+        /// GPUフレームループ実行後の時間状態を一度だけ非同期で読み戻し、
+        /// 蓄積時間、時間刻み、完了回数および実行状態の不変条件を検証する。
+        /// </summary>
+        [System.Diagnostics.Conditional("UNITY_EDITOR")]
+        private void RequestSimulationTimeStateValidation()
+        {
+            if (simulationTimeStateValidationRequested)
+            {
+                return;
+            }
+
+            simulationTimeStateValidationRequested = true;
+
+            var expectedMaximumAccumulatedSimulationTime = maximumAccumulatedSimulationTime;
+            var expectedMaximumSimulationSubstepCount = maximumSimulationSubstepCount;
+
+            AsyncGPUReadback.Request(
+                gpuBuffers.SimulationTimeStateBuffer,
+                request => ValidateSimulationTimeState(
+                    request,
+                    expectedMaximumAccumulatedSimulationTime,
+                    expectedMaximumSimulationSubstepCount
+                )
+            );
+        }
+
+        private void ValidateSimulationTimeState(
+            AsyncGPUReadbackRequest request,
+            float expectedMaximumAccumulatedSimulationTime,
+            int expectedMaximumSimulationSubstepCount)
+        {
+            if (request.hasError)
+            {
+                Debug.LogError("Failed to read GPU simulation time state.", this);
+                return;
+            }
+
+            var simulationTimeStates = request.GetData<SphSweGpuSimulationTimeState>();
+
+            if (simulationTimeStates.Length != 1)
+            {
+                Debug.LogError(
+                    ZString.Format(
+                        "GPU simulation time state buffer contained {0} elements, but 1 was expected.",
+                        simulationTimeStates.Length
+                    ),
+                    this
+                );
+                return;
+            }
+
+            var simulationTimeState = simulationTimeStates[0];
+            var accumulatedSimulationTimeIsFinite =
+                !float.IsNaN(simulationTimeState.AccumulatedSimulationTime)
+                && !float.IsInfinity(simulationTimeState.AccumulatedSimulationTime);
+            var accumulatedSimulationTimeIsInRange =
+                simulationTimeState.AccumulatedSimulationTime >= 0f
+                && simulationTimeState.AccumulatedSimulationTime
+                <= expectedMaximumAccumulatedSimulationTime + 0.000001f;
+            var currentSimulationTimeStepWasCleared =
+                AreApproximatelyEqual(simulationTimeState.CurrentSimulationTimeStep, 0f);
+            var completedSubstepCountIsInRange =
+                simulationTimeState.CompletedSubstepCount
+                <= (uint)expectedMaximumSimulationSubstepCount;
+            var simulationSubstepWasCompleted =
+                simulationTimeState.IsSimulationSubstepActive == 0u;
+
+            if (!accumulatedSimulationTimeIsFinite
+                || !accumulatedSimulationTimeIsInRange
+                || !currentSimulationTimeStepWasCleared
+                || !completedSubstepCountIsInRange
+                || !simulationSubstepWasCompleted)
+            {
+                Debug.LogError(
+                    ZString.Format(
+                        "GPU simulation time state validation failed. Accumulated: {0}, Current step: {1}, Completed steps: {2}, Active: {3}.",
+                        simulationTimeState.AccumulatedSimulationTime,
+                        simulationTimeState.CurrentSimulationTimeStep,
+                        simulationTimeState.CompletedSubstepCount,
+                        simulationTimeState.IsSimulationSubstepActive
+                    ),
+                    this
+                );
+                return;
+            }
+
+            Debug.Log(
+                ZString.Format(
+                    "GPU simulation time state validation passed. Accumulated: {0}, Completed steps: {1}.",
+                    simulationTimeState.AccumulatedSimulationTime,
+                    simulationTimeState.CompletedSubstepCount
+                ),
+                this
+            );
+        }
+
+        /// <summary>
         /// GPU計算結果を非同期で読み戻し、
         /// GPU計算開始時点のCPU版結果と比較するEditor専用の検証処理。
         /// </summary>

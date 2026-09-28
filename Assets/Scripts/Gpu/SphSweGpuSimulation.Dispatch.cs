@@ -116,16 +116,32 @@ namespace Gpu
         }
         
         /// <summary>
+        /// CFL条件による時間刻みと未処理時間を比較し、
+        /// 今回のサブステップで実際に進める時間を確定する。
+        /// </summary>
+        private void ExecuteFinalizeSimulationTimeStep()
+        {
+            simulationComputeShader.Dispatch(
+                finalizeSimulationTimeStepKernelIndex,
+                1,
+                1,
+                1
+            );
+        }
+        
+        /// <summary>
         /// 現在のGPU粒子状態から密度、加速度、CFL時間刻みを順番に計算し、
         /// 求めた時間刻みを使用して速度と位置を1サブステップ進める。
         /// 各処理は前段階の結果に依存するため、実行順を変更してはならない。
         /// </summary>
         private void ExecuteSimulationSubstep()
-        {
+        {   
             ExecuteDensityCalculation();
             ExecuteAccelerationCalculation();
             ExecuteMinimumTimeStepCalculation();
+            ExecuteFinalizeSimulationTimeStep();
             ExecuteParticleIntegration();
+            ExecuteCompleteSimulationSubstep();
         }
         
         /// <summary>
@@ -164,6 +180,36 @@ namespace Gpu
                 1,
                 1
             );
+        }
+        
+        /// <summary>
+        /// 粒子積分で進めた時間を未処理時間から減算し、
+        /// 完了したサブステップ数を増やす。
+        /// </summary>
+        private void ExecuteCompleteSimulationSubstep()
+        {
+            simulationComputeShader.Dispatch(
+                completeSimulationSubstepKernelIndex,
+                1,
+                1,
+                1
+            );
+        }
+        
+        /// <summary>
+        /// 描画フレームの経過時間をGPUへ蓄積し、
+        /// 最大サブステップ数を上限としてシミュレーションを進める。
+        /// 実際に必要なサブステップ数はGPU側の時間状態で判定する。
+        /// </summary>
+        private void ExecuteSimulationFrame(float frameDeltaTime)
+        {
+            ExecuteBeginSimulationFrame(frameDeltaTime);
+
+            for (var substepIndex = 0; substepIndex < maximumSimulationSubstepCount; substepIndex++)
+            {
+                ExecuteBeginSimulationSubstep();
+                ExecuteSimulationSubstep();
+            }
         }
     }
 }

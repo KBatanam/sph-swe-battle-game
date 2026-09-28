@@ -1,5 +1,7 @@
 #pragma kernel BeginSimulationFrame
 #pragma kernel BeginSimulationSubstep
+#pragma kernel FinalizeSimulationTimeStep
+#pragma kernel CompleteSimulationSubstep
 #pragma kernel ClearCellParticleCounts
 #pragma kernel RegisterParticlesInCells
 #pragma kernel ScanCellParticleCountsByGroup
@@ -183,11 +185,6 @@ void RegisterParticlesInCells(uint3 dispatchThreadId : SV_DispatchThreadID)
 [numthreads(128, 1, 1)]
 void ScanCellParticleCountsByGroup(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
-    if (IsSimulationSubstepInactive())
-    {
-        return;
-    }
-    
     /*
     128スレッドの各スレッドに、256セルの前半から1個、後半から1個を割り当て、
     さらにグループ番号を使ってグリッド全体のセル番号へ変換
@@ -300,11 +297,6 @@ void ScanCellParticleCountsByGroup(uint3 groupThreadId : SV_GroupThreadID, uint3
 [numthreads(128, 1, 1)]
 void ScanCellParticleCountGroupSums(uint3 groupThreadId : SV_GroupThreadID)
 {
-    if (IsSimulationSubstepInactive())
-    {
-        return;
-    }
-    
     uint firstGroupIndex = groupThreadId.x;
     uint secondGroupIndex = firstGroupIndex + ScanThreadCount;
     
@@ -643,7 +635,7 @@ void IntegrateParticles(uint3 dispatchThreadId : SV_DispatchThreadID)
     }
     
     uint particleIndex = dispatchThreadId.x;
-    float simulationDeltaTime = asfloat(_MinimumTimeStepBits[0]);
+    float simulationDeltaTime = _SimulationTimeState[0].CurrentSimulationTimeStep;
 
     if (particleIndex >= _ParticleCount || simulationDeltaTime <= 0.0f)
     {
@@ -695,11 +687,6 @@ void ClearMinimumTimeStep(uint3 dispatchThreadId : SV_DispatchThreadID)
 [numthreads(64, 1, 1)]
 void CalculateMinimumTimeStep(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupThreadId : SV_GroupThreadID)
 {
-    if (IsSimulationSubstepInactive())
-    {
-        return;
-    }
-    
     uint particleIndex = dispatchThreadId.x;
     uint localThreadIndex = groupThreadId.x;
     float particleTimeStep = _MaximumSimulationTimeStep;
@@ -746,4 +733,68 @@ void CalculateMinimumTimeStep(uint3 dispatchThreadId : SV_DispatchThreadID, uint
     {
         InterlockedMin(_MinimumTimeStepBits[0], asuint(SharedMinimumTimeSteps[0]));
     }
+}
+
+/// <summary>
+/// CFL条件による時間刻みと未処理のシミュレーション時間を比較し、
+/// 今回のサブステップで実際に進める時間を確定する。
+/// </summary>
+[numthreads(1, 1, 1)]
+void FinalizeSimulationTimeStep(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    if (IsSimulationSubstepInactive())
+    {
+        return;
+    }
+
+    SphSweGpuSimulationTimeState simulationTimeState = _SimulationTimeState[0];
+
+    float maximumStableTimeStep = asfloat(_MinimumTimeStepBits[0]);
+    float selectedTimeStep = min(maximumStableTimeStep,simulationTimeState.AccumulatedSimulationTime);
+    
+    if (selectedTimeStep <= 0.0f)
+    {
+        simulationTimeState.CurrentSimulationTimeStep = 0.0f;
+        simulationTimeState.IsSimulationSubstepActive = 0u;
+        _SimulationTimeState[0] = simulationTimeState;
+        return;
+    }
+
+    simulationTimeState.CurrentSimulationTimeStep = selectedTimeStep;
+    _SimulationTimeState[0] = simulationTimeState;
+}
+
+/// <summary>
+/// 粒子積分で進めた時間を未処理時間から減算し、
+/// このフレームで完了したサブステップ数を増やす。
+/// </summary>
+[numthreads(1, 1, 1)]
+void CompleteSimulationSubstep(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    if (IsSimulationSubstepInactive())
+    {
+        return;
+    }
+
+    SphSweGpuSimulationTimeState simulationTimeState = _SimulationTimeState[0];
+    float completedTimeStep = simulationTimeState.CurrentSimulationTimeStep;
+
+    if (completedTimeStep <= 0.0f)
+    {
+        simulationTimeState.CurrentSimulationTimeStep = 0.0f;
+        simulationTimeState.IsSimulationSubstepActive = 0u;
+        _SimulationTimeState[0] = simulationTimeState;
+        return;
+    }
+
+    simulationTimeState.AccumulatedSimulationTime = max(
+        0.0f,
+        simulationTimeState.AccumulatedSimulationTime - completedTimeStep
+    );
+
+    simulationTimeState.CurrentSimulationTimeStep = 0.0f;
+    simulationTimeState.CompletedSubstepCount++;
+    simulationTimeState.IsSimulationSubstepActive = 0u;
+
+    _SimulationTimeState[0] = simulationTimeState;
 }

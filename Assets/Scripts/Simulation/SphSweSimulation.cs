@@ -12,13 +12,9 @@ namespace Simulation
     public sealed partial class SphSweSimulation : MonoBehaviour
     {
         [Header("Particle Layout")]
-
-        [SerializeField, Min(1)]
-        private int particleCountX = 16;
-
-        [SerializeField, Min(1)]
-        private int particleCountZ = 16;
-
+        
+        private int particleCountX;
+        private int particleCountZ;
         private float particleSpacing;
 
         [SerializeField]
@@ -141,8 +137,6 @@ namespace Simulation
         
         private void OnValidate()
         {
-            particleCountX = Mathf.Max(1, particleCountX);
-            particleCountZ = Mathf.Max(1, particleCountZ);
             particleMass = Mathf.Max(0.0001f, particleMass);
             kernelParticleCount = Mathf.Max(1, kernelParticleCount);
             gizmoRadius = Mathf.Max(0.001f, gizmoRadius);
@@ -153,6 +147,10 @@ namespace Simulation
             viscosityCoefficient = Mathf.Max(0f, viscosityCoefficient);
             simulationAreaSize.x = Mathf.Max(0.001f, simulationAreaSize.x);
             simulationAreaSize.y = Mathf.Max(0.001f, simulationAreaSize.y);
+            
+            CalculateParticleDimensionsFromReferenceParameters();
+            CalculateFluidParticleCountsFromSimulationArea();
+            
             courantNumber = Mathf.Clamp(courantNumber, 0.01f, 1f);
             maximumSimulationTimeStep = Mathf.Max(0.000001f, maximumSimulationTimeStep);
             maximumSimulationSubstepCount = Mathf.Max(1, maximumSimulationSubstepCount);
@@ -164,6 +162,7 @@ namespace Simulation
         private void Initialize()
         {
             CalculateParticleDimensionsFromReferenceParameters();
+            CalculateFluidParticleCountsFromSimulationArea();
             GenerateParticles();
             CalculateDensitiesUsingSpatialGrid();
             CalculateAccelerations();
@@ -190,7 +189,34 @@ namespace Simulation
         }
         
         /// <summary>
-        /// Inspectorの設定値を使用して流体粒子を格子状に生成する。
+        /// シミュレーション領域を固定粒子間隔で可能な限り埋めるため、
+        /// X方向およびZ方向の流体粒子数を計算する。
+        /// 粒子中心が領域境界へ直接重なりにくいよう、
+        /// 領域幅を粒子間隔で割った値を切り上げて使用する。
+        /// </summary>
+        private void CalculateFluidParticleCountsFromSimulationArea()
+        {
+            if (particleSpacing <= 0f)
+            {
+                particleCountX = 1;
+                particleCountZ = 1;
+                return;
+            }
+
+            particleCountX = Mathf.Max(
+                1,
+                Mathf.CeilToInt(simulationAreaSize.x / particleSpacing)
+            );
+
+            particleCountZ = Mathf.Max(
+                1,
+                Mathf.CeilToInt(simulationAreaSize.y / particleSpacing)
+            );
+        }
+        
+        /// <summary>
+        /// シミュレーション領域を固定粒子間隔で埋めるように、
+        /// 自動計算された粒子数を使用して流体粒子を格子状に生成する。
         /// </summary>
         [ContextMenu("Generate Particles")]
         public void GenerateParticles()

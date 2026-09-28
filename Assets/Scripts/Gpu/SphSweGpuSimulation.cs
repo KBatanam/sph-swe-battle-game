@@ -18,12 +18,17 @@ namespace Gpu
         private SphSweSimulation sourceSimulation;
 
         private SphSweGpuBuffers gpuBuffers;
+        private bool simulationTimeStateValidationRequested;
+        private bool continuousSimulationParticleValidationRequested;
 
         private Vector2 gridMinimumPosition;
         private int gridCellCountX;
         private int gridCellCountZ;
         
         [Header("Simulation Timing")]
+        
+        [SerializeField]
+        private bool simulationExecutionEnabled = true;
 
         [SerializeField, Min(0.001f)]
         private float maximumAccumulatedSimulationTime = 0.1f;
@@ -31,11 +36,44 @@ namespace Gpu
         [SerializeField, Min(1)]
         private int maximumSimulationSubstepCount = 20;
 
+        public SphSweSimulation SourceSimulation => sourceSimulation;
+        
+        /// <summary>
+        /// 描画処理で使用するGPU粒子バッファと粒子数を取得する。
+        /// 返されたバッファの所有権はSphSweGpuSimulationが保持するため、
+        /// 呼び出し側でDisposeしてはならない。
+        /// </summary>
+        public bool TryGetParticleBuffer(out GraphicsBuffer particleBuffer, out int particleCount)
+        {
+            if (gpuBuffers == null || gpuBuffers.ParticleBuffer == null || !gpuBuffers.ParticleBuffer.IsValid())
+            {
+                particleBuffer = null;
+                particleCount = 0;
+                return false;
+            }
+
+            particleBuffer = gpuBuffers.ParticleBuffer;
+            particleCount = gpuBuffers.ParticleCount;
+            return true;
+        }
+        
         private void Start()
         {
             ValidateReferences();
             InitializeKernelIndices();
             InitializeGpuResources();
+        }
+        
+        private void Update()
+        {
+            if (!simulationExecutionEnabled || gpuBuffers == null)
+            {
+                return;
+            }
+
+            ExecuteSimulationFrame(Time.deltaTime);
+            RequestSimulationTimeStateValidation();
+            RequestContinuousSimulationParticleValidation();
         }
 
         private void OnDestroy()
@@ -83,9 +121,6 @@ namespace Gpu
             
             BindBuffersToKernels();
             SetSimulationParameters();
-            ExecuteSimulationSubstep();
-            RequestMinimumTimeStepValidation();
-            RequestSimulationCalculationValidation();
         }
 
         private void CalculateGridBounds(SphSweParticle[] particles, float cellSize)

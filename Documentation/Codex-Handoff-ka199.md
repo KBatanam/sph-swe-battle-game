@@ -212,6 +212,77 @@ BeginSimulationFrame
 
 CPUは固定上限までDispatchを登録するが、実際に必要な回数はGPU上の`IsSimulationSubstepActive`で制御する。これにより、サブステップごとのGPUからCPUへの読み戻しと同期を避ける。
 
+## 最新状況（2026年9月28日）
+
+この節は、上に記録された以前の「現在の作業位置」と「次に行うこと」より新しい状態を表す。
+
+実装済み：
+
+- `FinalizeSimulationTimeStep`でCFL時間刻みと未処理時間の小さい方を実時間刻みにする。
+- `IntegrateParticles`は`CurrentSimulationTimeStep`を使用する。
+- `CompleteSimulationSubstep`で進めた時間を減算し、完了回数を増やす。
+- `Update()`からフレーム時間を蓄積し、最大サブステップ数までGPU処理を登録する。
+- 不要なサブステップはGPU側のフラグによって早期終了する。
+- 旧一回実行向けの自動検証呼び出しを外した。
+- GPUフレームループ後の時間状態を一度だけ`AsyncGPUReadback`で検証するEditor専用処理を追加した。
+
+GPU時間状態とUpdate駆動ループの基本検証まで完了している。
+
+次に行うこと：
+
+1. 連続実行後のGPU粒子位置・速度を検証または可視化する。
+2. Profilerで固定上限分のDispatchと早期終了のコストを計測する。
+
+### 時間状態の検証結果
+
+2026年9月28日、Unity Editor上で次の成功ログを確認した。
+
+```text
+GPU simulation time state validation passed. Accumulated: 0, Completed steps: 5.
+```
+
+GPU時間状態、Update駆動ループおよび連続実行後のGPU粒子状態の基本検証は完了した。次は、GPU粒子の可視化またはProfiler計測へ進む。
+
+なお、`GroupMemoryBarrierWithGroupSync`を使用する次のカーネルでは、Barrier前の早期リターンによってカーネルが無効になったため、先頭の非アクティブ判定を削除した。
+
+- `ScanCellParticleCountsByGroup`
+- `ScanCellParticleCountGroupSums`
+- `CalculateMinimumTimeStep`
+
+これらを最適化する場合は、全スレッドがBarrierへ到達する構造を維持する。
+
+### 連続GPU粒子の検証結果
+
+2026年9月28日、連続実行後のGPU粒子について次の成功ログを確認した。
+
+```text
+GPU continuous particle validation passed. Particle count: 985, moved fluid particles: 24.
+```
+
+位置、速度、加速度、密度、流体深さの有限性、流体粒子の領域制限および境界粒子の固定を全985粒子が通過した。流体粒子24個の位置または速度が初期状態から変化したため、GPUフレームループによる継続的な粒子積分も確認できた。
+
+次は、GPU粒子の可視化、またはProfilerによる固定上限分のDispatchと非アクティブ処理のコスト計測へ進む。
+
+## 最新状況（2026年9月29日）
+
+GPU粒子の可視化まで完了した。
+
+- `Graphics.RenderPrimitives`でParticle BufferをCPUへ戻さず描画する。
+- 1粒子を6頂点のビルボードとして描き、Fragment Shaderで円形に切り抜く。
+- Materialプロパティは共通`UnityPerMaterial` CBUFFERへまとめた。
+- Materialプレビューの未接続Buffer警告を避けるため、実行時だけローカルShaderキーワードを有効化する。
+- 流体粒子数は`Simulation Area`と固定粒子間隔から自動計算する。
+- 現在の総粒子数は境界粒子を含めて13,504個であり、これを想定上限とする。
+- Editor上の参考値として200 FPS台を確認した。
+- CPU版の`Simulation Execution Enabled`はオフ、GPU版はオンにしてSceneへ保存済みである。
+- 画面左下にTextMeshProとZStringを使用したFPS表示を追加した。
+
+GPU関連のMenuItemテスト7件は2026年9月29日にすべて成功した。連続実行対応後のKernelを単体テストする際は、`IsSimulationSubstepActive = 1`の時間状態Bufferを接続する必要がある。
+
+詳細は`Documentation/17-GPU-Particle-Rendering.md`を参照する。
+
+今後、ゲーム用水面は固定格子メッシュへ粒子水深を補間して描画する。船は水面へ反作用を与えず、水面高さ、法線および水平流速へ一方向に追従させる。この作業は後で行い、当面は現在の粒子ビルボードを診断表示として使用する。
+
 ## Gitおよび共有時の注意
 
 - ソースコードと共有設計文書は通常どおりGitHubで共有する。

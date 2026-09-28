@@ -33,6 +33,8 @@ namespace Editor
         private static readonly int GridCellCountZPropertyId = Shader.PropertyToID("_GridCellCountZ");
         private static readonly int EffectiveRadiusPropertyId = Shader.PropertyToID("_EffectiveRadius");
         private static readonly int ReferenceDensityPropertyId = Shader.PropertyToID("_ReferenceDensity");
+        private static readonly int SimulationTimeStatePropertyId =
+            Shader.PropertyToID("_SimulationTimeState");
 
         [MenuItem("Tools/SPH-SWE/Tests/Test GPU Complete Spatial Grid Build")]
         private static void TestGpuCompleteSpatialGridBuild()
@@ -82,10 +84,16 @@ namespace Editor
             using var cellParticleWriteIndexBuffer =
                 CreateUIntBuffer(cellParticleWriteIndices);
             using var sortedParticleIndexBuffer = CreateUIntBuffer(sortedParticleIndices);
+            using var simulationTimeStateBuffer = CreateActiveSimulationTimeStateBuffer();
 
             particleBuffer.SetData(particles);
 
             var clearKernelIndex = computeShader.FindKernel("ClearCellParticleCounts");
+            BindSimulationTimeStateBuffer(
+                computeShader,
+                clearKernelIndex,
+                simulationTimeStateBuffer
+            );
             computeShader.SetBuffer(
                 clearKernelIndex,
                 CellParticleCountsPropertyId,
@@ -95,6 +103,11 @@ namespace Editor
             Dispatch(computeShader, clearKernelIndex, cellCount);
 
             var registerKernelIndex = computeShader.FindKernel("RegisterParticlesInCells");
+            BindSimulationTimeStateBuffer(
+                computeShader,
+                registerKernelIndex,
+                simulationTimeStateBuffer
+            );
             computeShader.SetBuffer(registerKernelIndex, ParticlesPropertyId, particleBuffer);
             computeShader.SetBuffer(
                 registerKernelIndex,
@@ -153,6 +166,11 @@ namespace Editor
             var addGroupStartIndicesKernelIndex = computeShader.FindKernel(
                 "AddGroupStartIndicesToCellParticleStartIndices"
             );
+            BindSimulationTimeStateBuffer(
+                computeShader,
+                addGroupStartIndicesKernelIndex,
+                simulationTimeStateBuffer
+            );
             computeShader.SetBuffer(
                 addGroupStartIndicesKernelIndex,
                 CellParticleStartIndicesPropertyId,
@@ -169,6 +187,11 @@ namespace Editor
             var initializeWriteIndicesKernelIndex = computeShader.FindKernel(
                 "InitializeCellParticleWriteIndices"
             );
+            BindSimulationTimeStateBuffer(
+                computeShader,
+                initializeWriteIndicesKernelIndex,
+                simulationTimeStateBuffer
+            );
             computeShader.SetBuffer(
                 initializeWriteIndicesKernelIndex,
                 CellParticleStartIndicesPropertyId,
@@ -183,6 +206,11 @@ namespace Editor
             Dispatch(computeShader, initializeWriteIndicesKernelIndex, cellCount);
 
             var sortKernelIndex = computeShader.FindKernel("SortParticleIndicesByCell");
+            BindSimulationTimeStateBuffer(
+                computeShader,
+                sortKernelIndex,
+                simulationTimeStateBuffer
+            );
             computeShader.SetBuffer(
                 sortKernelIndex,
                 ParticleCellIndicesPropertyId,
@@ -202,6 +230,11 @@ namespace Editor
             Dispatch(computeShader, sortKernelIndex, particles.Length);
 
             var densityKernelIndex = computeShader.FindKernel("CalculateDensities");
+            BindSimulationTimeStateBuffer(
+                computeShader,
+                densityKernelIndex,
+                simulationTimeStateBuffer
+            );
             computeShader.SetBuffer(densityKernelIndex, ParticlesPropertyId, particleBuffer);
             computeShader.SetBuffer(densityKernelIndex, ParticleCellIndicesPropertyId, particleCellIndexBuffer);
             computeShader.SetBuffer(densityKernelIndex, CellParticleCountsPropertyId, cellParticleCountBuffer);
@@ -331,6 +364,7 @@ namespace Editor
                 CreateUIntBuffer(cellParticleCountSumsByGroup);
             using var cellParticleCountStartIndexByGroupBuffer =
                 CreateUIntBuffer(cellParticleCountStartIndicesByGroup);
+            using var simulationTimeStateBuffer = CreateActiveSimulationTimeStateBuffer();
 
             var partialScanKernelIndex = computeShader.FindKernel(
                 "ScanCellParticleCountsByGroup"
@@ -376,6 +410,11 @@ namespace Editor
 
             var addGroupStartIndicesKernelIndex = computeShader.FindKernel(
                 "AddGroupStartIndicesToCellParticleStartIndices"
+            );
+            BindSimulationTimeStateBuffer(
+                computeShader,
+                addGroupStartIndicesKernelIndex,
+                simulationTimeStateBuffer
             );
             computeShader.SetBuffer(
                 addGroupStartIndicesKernelIndex,
@@ -611,12 +650,18 @@ namespace Editor
                 cellParticleCounts.Length,
                 sizeof(uint)
             );
+            using var simulationTimeStateBuffer = CreateActiveSimulationTimeStateBuffer();
 
             particleBuffer.SetData(particles);
             particleCellIndexBuffer.SetData(particleCellIndices);
             cellParticleCountBuffer.SetData(cellParticleCounts);
 
             var clearKernelIndex = computeShader.FindKernel("ClearCellParticleCounts");
+            BindSimulationTimeStateBuffer(
+                computeShader,
+                clearKernelIndex,
+                simulationTimeStateBuffer
+            );
             computeShader.SetBuffer(
                 clearKernelIndex,
                 CellParticleCountsPropertyId,
@@ -626,6 +671,11 @@ namespace Editor
             Dispatch(computeShader, clearKernelIndex, cellCount);
 
             var registerKernelIndex = computeShader.FindKernel("RegisterParticlesInCells");
+            BindSimulationTimeStateBuffer(
+                computeShader,
+                registerKernelIndex,
+                simulationTimeStateBuffer
+            );
             computeShader.SetBuffer(registerKernelIndex, ParticlesPropertyId, particleBuffer);
             computeShader.SetBuffer(
                 registerKernelIndex,
@@ -724,6 +774,38 @@ namespace Editor
             );
             buffer.SetData(values);
             return buffer;
+        }
+
+        private static GraphicsBuffer CreateActiveSimulationTimeStateBuffer()
+        {
+            var buffer = new GraphicsBuffer(
+                GraphicsBuffer.Target.Structured,
+                1,
+                SphSweGpuSimulationTimeState.Stride
+            );
+
+            var activeSimulationTimeState = new[]
+            {
+                new SphSweGpuSimulationTimeState
+                {
+                    IsSimulationSubstepActive = 1u
+                }
+            };
+
+            buffer.SetData(activeSimulationTimeState);
+            return buffer;
+        }
+
+        private static void BindSimulationTimeStateBuffer(
+            ComputeShader computeShader,
+            int kernelIndex,
+            GraphicsBuffer simulationTimeStateBuffer)
+        {
+            computeShader.SetBuffer(
+                kernelIndex,
+                SimulationTimeStatePropertyId,
+                simulationTimeStateBuffer
+            );
         }
 
         private static void VerifyCellParticleIndices(

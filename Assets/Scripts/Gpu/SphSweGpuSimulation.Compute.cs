@@ -52,6 +52,8 @@ namespace Gpu
         private int calculateMinimumTimeStepKernelIndex;
         private int beginSimulationFrameKernelIndex;
         private int beginSimulationSubstepKernelIndex;
+        private int finalizeSimulationTimeStepKernelIndex;
+        private int completeSimulationSubstepKernelIndex;
 
         private void InitializeKernelIndices()
         {
@@ -69,6 +71,8 @@ namespace Gpu
             integrateParticlesKernelIndex = simulationComputeShader.FindKernel("IntegrateParticles");
             clearMinimumTimeStepKernelIndex = simulationComputeShader.FindKernel("ClearMinimumTimeStep");
             calculateMinimumTimeStepKernelIndex = simulationComputeShader.FindKernel("CalculateMinimumTimeStep");
+            finalizeSimulationTimeStepKernelIndex = simulationComputeShader.FindKernel("FinalizeSimulationTimeStep");
+            completeSimulationSubstepKernelIndex = simulationComputeShader.FindKernel("CompleteSimulationSubstep");
         }
 
         /// <summary>
@@ -81,6 +85,8 @@ namespace Gpu
         {
             BindSimulationTimeStateBuffer(beginSimulationFrameKernelIndex);
             BindSimulationTimeStateBuffer(beginSimulationSubstepKernelIndex);
+            BindSimulationTimeStateBuffer(finalizeSimulationTimeStepKernelIndex);
+            BindSimulationTimeStateBuffer(completeSimulationSubstepKernelIndex);
             BindSimulationTimeStateBuffer(clearCellParticleCountsKernelIndex);
             BindSimulationTimeStateBuffer(registerParticlesInCellsKernelIndex);
             BindSimulationTimeStateBuffer(scanCellParticleCountsByGroupKernelIndex);
@@ -230,11 +236,6 @@ namespace Gpu
                 gpuBuffers.ParticleBuffer
             );
             simulationComputeShader.SetBuffer(
-                integrateParticlesKernelIndex,
-                MinimumTimeStepBitsPropertyId,
-                gpuBuffers.MinimumTimeStepBitsBuffer
-            );
-            simulationComputeShader.SetBuffer(
                 calculateMinimumTimeStepKernelIndex,
                 ParticlesPropertyId,
                 gpuBuffers.ParticleBuffer
@@ -246,6 +247,11 @@ namespace Gpu
             );
             simulationComputeShader.SetBuffer(
                 clearMinimumTimeStepKernelIndex,
+                MinimumTimeStepBitsPropertyId,
+                gpuBuffers.MinimumTimeStepBitsBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                finalizeSimulationTimeStepKernelIndex,
                 MinimumTimeStepBitsPropertyId,
                 gpuBuffers.MinimumTimeStepBitsBuffer
             );

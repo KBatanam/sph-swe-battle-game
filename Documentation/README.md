@@ -29,6 +29,7 @@
 14. [連続配列型の空間グリッド](14-Contiguous-Array-Spatial-Grid.md)
 15. [時間刻みと境界粒子層数の比較](15-Time-Step-And-Boundary-Layer-Benchmark.md)
 16. [Compute Shader移植方針](16-Compute-Shader-Migration.md)
+17. [GPU粒子描画](17-GPU-Particle-Rendering.md)
 
 ## 現在の到達点
 
@@ -61,6 +62,14 @@
 - 最大時間刻みは長時間安定性試験を通過した`0.004`秒を正式採用し、CFL条件と併用
 - CPU版を検証基準として保持し、大規模粒子向けにCompute Shader版を別実装する方針を決定
 - GPU転送用の48バイト粒子構造とメモリレイアウトテストを追加
+- GPU側にフレーム経過時間、未処理時間、現在の時間刻み、完了サブステップ数を保持する時間管理状態を追加
+- CFL時間刻みと未処理時間から実時間刻みを決定し、最大20サブステップのUpdate駆動GPUループを実装・検証済み
+- Compute ShaderのParticle BufferをCPUへ戻さず、`Graphics.RenderPrimitives`で全粒子を一括描画
+- `Simulation Area`と固定粒子間隔から流体粒子数を自動計算し、領域全体へ中央揃えで配置
+- 境界粒子を含む13,504粒子でGPU連続シミュレーションと描画を検証済み
+- Unity Editor上の参考値として200 FPS台を確認し、13,504粒子を現時点の想定上限として採用
+- CPU版は初期生成と検証基準として残し、GPU連続実行時はCPU版の毎フレーム計算を停止
+- 最終水面は固定格子メッシュの頂点高さを補間する方式、船は水面への反作用なしで高さ・法線・流速へ追従する方針
 
 ## Gitブランチ運用
 

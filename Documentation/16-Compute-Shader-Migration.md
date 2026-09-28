@@ -263,3 +263,82 @@ Scanグループ数 : 3
 有効半径は粒子ごとの値ではなく、シミュレーション全体で共通の`_EffectiveRadius`を使用する。GPU粒子構造体内の`EffectiveRadius`は、CPU・GPU間の48 bytesのデータ配置を維持するため現時点では残している。
 
 テストではCPU版`SphSweKernel.EvaluatePoly6`による全粒子探索の結果を期待値とし、GPU版の計算結果と比較した。グリッド外の粒子は近傍候補から除外し、密度と流体深さが全粒子で許容誤差`0.0001`以内に一致することをUnity Editor上で確認した。
+
+## GPU側のフレーム時間管理
+
+サブステップごとにCFL時間刻みをCPUへ読み戻すと、CPUがGPUの完了を待つ同期が発生する。連続実行では、時間状態とサブステップ継続判定をGPU側へ保持する。
+
+```text
+描画フレーム開始
+  ↓
+Time.deltaTimeを未処理時間へ加算
+  ↓
+最大サブステップ回数分のDispatchを登録
+  ├─ 未処理時間と回数上限から実行可否を判定
+  ├─ 空間グリッド、密度、加速度を計算
+  ├─ CFL時間刻みを計算
+  ├─ CFL時間刻みと未処理時間から実時間刻みを確定
+  ├─ 粒子を積分
+  └─ 進めた時間を減算して完了回数を加算
+```
+
+時間状態は次の4値を持つ。
+
+```text
+AccumulatedSimulationTime
+CurrentSimulationTimeStep
+CompletedSubstepCount
+IsSimulationSubstepActive
+```
+
+C#とHLSLの双方で`float`2個と`uint`2個を同じ順序で配置し、Structured Bufferのstrideを16 bytesとする。C#側では`StructLayout(LayoutKind.Sequential, Pack = 4)`によって宣言順と4 bytes境界を明示する。構造体内の`const Stride`はインスタンスデータに含まれないため、GPUへ転送する16 bytesの配置には影響しない。
+
+CPUは1フレーム当たり最大20回分のDispatchを登録する。必要な時間を進め終えた後は`IsSimulationSubstepActive`を`0`とし、各計算カーネルの先頭で早期終了する。これにより、サブステップごとのGPUからCPUへの読み戻しを避ける。
+
+未処理時間には上限を設ける。処理落ちした時間を無制限に蓄積すると、過去の時間へ追いつくための計算がさらにフレームを遅らせるためである。
+
+2026年9月28日時点で、GPU時間状態、フレーム開始、サブステップ開始、実時間刻み確定、粒子積分、サブステップ完了およびUpdate駆動ループを実装済みである。Editorでは実行後の時間状態を`AsyncGPUReadback`で一度だけ読み戻し、次の不変条件を検証する。
+
+- 蓄積時間が有限かつ`0`以上、設定上限以下であること
+- サブステップ完了後の現在時間刻みが`0`であること
+- 完了回数が最大サブステップ数以下であること
+- 予約されたサブステップが完了して非アクティブであること
+
+Unity Editor上で次の成功ログを確認した。
+
+```text
+GPU simulation time state validation passed. Accumulated: 0, Completed steps: 5.
+```
+
+この結果では、描画フレームの経過時間を5サブステップで消費し、未処理時間が`0`となった。完了回数は設定上限20以下であり、時間状態の基本的な更新が正常に完了した。
+
+### Group Barrierを使用するカーネルの非アクティブ処理
+
+`GroupMemoryBarrierWithGroupSync`を使用するカーネルでは、Barrierより前に動的な条件で一部スレッドが早期リターンする可能性を作ってはならない。全スレッドがBarrierへ到達しない場合、Compute Shaderカーネルが無効になるためである。
+
+この制約により、次の3カーネルには`IsSimulationSubstepInactive()`による先頭の早期リターンを置かない。
+
+- `ScanCellParticleCountsByGroup`
+- `ScanCellParticleCountGroupSums`
+- `CalculateMinimumTimeStep`
+
+非アクティブ時の追加最適化を行う場合も、グループ内の全スレッドをBarrierへ到達させたまま、入力値をゼロまたは既定値にする、重い粒子計算だけを省略する、結果書き込みだけを抑止する、といった構造にする必要がある。
+
+### 連続実行後のGPU粒子検証
+
+GPUフレームループ後の粒子バッファを`AsyncGPUReadback`で一度だけ読み戻し、次を検証するEditor専用処理を追加した。
+
+- 位置、速度、加速度、密度および流体深さが有限値であること
+- 流体粒子がシミュレーション領域内に収まること
+- 境界粒子の位置と速度が初期状態から変化しないこと
+- 初期状態から位置または速度が変化した流体粒子数を診断情報として報告すること
+
+一様な静止状態では流体粒子が動かないことも正しいため、移動粒子数が`0`であること自体は失敗条件にしない。
+
+2026年9月28日、Unity Editor上で次の成功ログを確認した。
+
+```text
+GPU continuous particle validation passed. Particle count: 985, moved fluid particles: 24.
+```
+
+全985粒子が検証条件を満たし、そのうち流体粒子24個の位置または速度が初期状態から変化した。これにより、GPUフレームループが時間状態を更新するだけでなく、確定した実時間刻みを使用して粒子積分まで継続実行していることを確認した。
