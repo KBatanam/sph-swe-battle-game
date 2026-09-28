@@ -2,7 +2,6 @@ using System;
 using Gpu;
 using UnityEngine;
 using Validation;
-using Cysharp.Text;
 
 namespace Gameplay
 {
@@ -23,7 +22,7 @@ namespace Gameplay
         private float waveImpulseStrength = 1f;
 
         /// <summary>
-        /// このGameObjectに最も近いシミュレーション領域内の位置から、
+        /// このGameObjectの位置を中心として、
         /// transform.forward方向へ進む波を一度だけ発生させる。
         /// </summary>
         public bool TryGenerateWave()
