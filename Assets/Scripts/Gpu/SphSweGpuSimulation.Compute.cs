@@ -38,6 +38,11 @@ namespace Gpu
         private static readonly int MaximumAccumulatedSimulationTimePropertyId = Shader.PropertyToID("_MaximumAccumulatedSimulationTime");
         private static readonly int MaximumSimulationSubstepCountPropertyId = Shader.PropertyToID("_MaximumSimulationSubstepCount");
         
+        private static readonly int WaveImpulseCenterSimulationPositionPropertyId = Shader.PropertyToID("_WaveImpulseCenterSimulationPosition");
+        private static readonly int WaveImpulseSimulationDirectionPropertyId = Shader.PropertyToID("_WaveImpulseSimulationDirection");
+        private static readonly int WaveImpulseRadiusPropertyId = Shader.PropertyToID("_WaveImpulseRadius");
+        private static readonly int WaveImpulseStrengthPropertyId = Shader.PropertyToID("_WaveImpulseStrength");
+        
         private int clearCellParticleCountsKernelIndex;
         private int registerParticlesInCellsKernelIndex;
         private int scanCellParticleCountsByGroupKernelIndex;
@@ -54,6 +59,7 @@ namespace Gpu
         private int beginSimulationSubstepKernelIndex;
         private int finalizeSimulationTimeStepKernelIndex;
         private int completeSimulationSubstepKernelIndex;
+        private int applyWaveImpulseKernelIndex;
 
         private void InitializeKernelIndices()
         {
@@ -73,6 +79,7 @@ namespace Gpu
             calculateMinimumTimeStepKernelIndex = simulationComputeShader.FindKernel("CalculateMinimumTimeStep");
             finalizeSimulationTimeStepKernelIndex = simulationComputeShader.FindKernel("FinalizeSimulationTimeStep");
             completeSimulationSubstepKernelIndex = simulationComputeShader.FindKernel("CompleteSimulationSubstep");
+            applyWaveImpulseKernelIndex = simulationComputeShader.FindKernel("ApplyWaveImpulse");
         }
 
         /// <summary>
@@ -254,6 +261,11 @@ namespace Gpu
                 finalizeSimulationTimeStepKernelIndex,
                 MinimumTimeStepBitsPropertyId,
                 gpuBuffers.MinimumTimeStepBitsBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                applyWaveImpulseKernelIndex,
+                ParticlesPropertyId,
+                gpuBuffers.ParticleBuffer
             );
         }
         

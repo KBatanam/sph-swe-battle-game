@@ -1,5 +1,6 @@
 #pragma kernel BeginSimulationFrame
 #pragma kernel BeginSimulationSubstep
+#pragma kernel ApplyWaveImpulse
 #pragma kernel FinalizeSimulationTimeStep
 #pragma kernel CompleteSimulationSubstep
 #pragma kernel ClearCellParticleCounts
@@ -59,6 +60,11 @@ float _ViscosityCoefficient;
 float2 _SimulationMinimumPosition;
 float2 _SimulationMaximumPosition;
 
+float2 _WaveImpulseCenterSimulationPosition;
+float2 _WaveImpulseSimulationDirection;
+float _WaveImpulseRadius;
+float _WaveImpulseStrength;
+
 float _CourantNumber;
 float _MaximumSimulationTimeStep;
 
@@ -82,6 +88,55 @@ groupshared float SharedMinimumTimeSteps[64];
 bool IsSimulationSubstepInactive()
 {
     return _SimulationTimeState[0].IsSimulationSubstepActive == 0u;
+}
+
+/// <summary>
+/// 指定範囲内の流体粒子へ、波の進行方向に沿った速度Impulseを一度だけ加える。
+/// このKernelはゲーム入力から独立してDispatchされるため、
+/// シミュレーションサブステップのActive状態には依存しない。
+/// </summary>
+[numthreads(64, 1, 1)]
+void ApplyWaveImpulse(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    uint particleIndex = dispatchThreadId.x;
+
+    if (particleIndex >= _ParticleCount)
+    {
+        return;
+    }
+
+    SphSweGpuParticle particle = _Particles[particleIndex];
+
+    if (particle.Type == BoundaryParticleType)
+    {
+        return;
+    }
+
+    if (_WaveImpulseRadius <= 0.0f || _WaveImpulseStrength <= 0.0f)
+    {
+        return;
+    }
+
+    float2 differenceFromImpulseCenter = particle.Position - _WaveImpulseCenterSimulationPosition;
+    float squaredDistanceFromImpulseCenter = dot(differenceFromImpulseCenter, differenceFromImpulseCenter);
+    float squaredWaveImpulseRadius = _WaveImpulseRadius * _WaveImpulseRadius;
+
+    if (squaredDistanceFromImpulseCenter >= squaredWaveImpulseRadius)
+    {
+        return;
+    }
+
+    float distanceFromImpulseCenter = sqrt(squaredDistanceFromImpulseCenter);
+    float normalizedDistanceFromImpulseCenter = distanceFromImpulseCenter / _WaveImpulseRadius;
+    float impulseWeight = 1.0f - normalizedDistanceFromImpulseCenter;
+    impulseWeight *= impulseWeight;
+
+    particle.Velocity +=
+        _WaveImpulseSimulationDirection
+        * _WaveImpulseStrength
+        * impulseWeight;
+
+    _Particles[particleIndex] = particle;
 }
 
 /// <summary>

@@ -1,4 +1,5 @@
 using System;
+using UnityEngine;
 
 namespace Gpu
 {
@@ -210,6 +211,77 @@ namespace Gpu
                 ExecuteBeginSimulationSubstep();
                 ExecuteSimulationSubstep();
             }
+        }
+        
+        /// <summary>
+        /// 指定したシミュレーション座標を中心として、
+        /// 範囲内の流体粒子へ指定方向の速度Impulseを一度だけ加える。
+        /// </summary>
+        public bool TryApplyWaveImpulse(
+            Vector2 centerSimulationPosition,
+            Vector2 simulationDirection,
+            float radius,
+            float strength)
+        {
+            if (gpuBuffers == null || gpuBuffers.ParticleBuffer == null || !gpuBuffers.ParticleBuffer.IsValid())
+            {
+                return false;
+            }
+
+            if (simulationDirection.sqrMagnitude <= 0f)
+            {
+                throw new ArgumentException(
+                    "Wave impulse direction must not be zero.",
+                    nameof(simulationDirection)
+                );
+            }
+
+            if (radius <= 0f)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(radius),
+                    radius,
+                    "Wave impulse radius must be greater than zero."
+                );
+            }
+
+            if (strength <= 0f)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(strength),
+                    strength,
+                    "Wave impulse strength must be greater than zero."
+                );
+            }
+
+            var normalizedSimulationDirection = simulationDirection.normalized;
+
+            simulationComputeShader.SetVector(
+                WaveImpulseCenterSimulationPositionPropertyId,
+                centerSimulationPosition
+            );
+
+            simulationComputeShader.SetVector(
+                WaveImpulseSimulationDirectionPropertyId,
+                normalizedSimulationDirection
+            );
+
+            simulationComputeShader.SetFloat(
+                WaveImpulseRadiusPropertyId,
+                radius
+            );
+
+            simulationComputeShader.SetFloat(
+                WaveImpulseStrengthPropertyId,
+                strength
+            );
+
+            DispatchOneDimension(
+                applyWaveImpulseKernelIndex,
+                gpuBuffers.ParticleCount
+            );
+
+            return true;
         }
     }
 }
