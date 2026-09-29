@@ -13,6 +13,9 @@ namespace Gameplay
         [SerializeField, Required]
         private SphSweSimulation simulation;
 
+        [SerializeField, Required]
+        private SphSweStunStatus stunStatus;
+        
         [Header("Movement")]
 
         [SerializeField, Min(0f)]
@@ -39,16 +42,16 @@ namespace Gameplay
 
         private void Awake()
         {
-            if (simulation == null)
-            {
-                throw new InvalidOperationException(
-                    "Simulation is not assigned."
-                );
-            }
+            ValidateReferences();
         }
 
         private void Update()
         {
+            if (stunStatus.IsStunned)
+            {
+                return;
+            }
+
             ApplyHorizontalMovement(Time.deltaTime);
         }
 
@@ -76,6 +79,19 @@ namespace Gameplay
         {
             horizontalMovementSpeed = Mathf.Max(0f, horizontalMovementSpeed);
             horizontalMovementBoundaryInset = Mathf.Max(0f, horizontalMovementBoundaryInset);
+        }
+        
+        private void ValidateReferences()
+        {
+            if (simulation == null)
+            {
+                throw new InvalidOperationException("Simulation is not assigned.");
+            }
+
+            if (stunStatus == null)
+            {
+                throw new InvalidOperationException("Stun Status is not assigned.");
+            }
         }
     }
 }

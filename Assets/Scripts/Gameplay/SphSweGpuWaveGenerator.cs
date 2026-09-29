@@ -12,6 +12,9 @@ namespace Gameplay
 
         [SerializeField, Required]
         private SphSweGpuSimulation gpuSimulation;
+        
+        [SerializeField, Required]
+        private SphSweStunStatus stunStatus;
 
         [Header("Wave Impulse")]
 
@@ -27,11 +30,9 @@ namespace Gameplay
         /// </summary>
         public bool TryGenerateWave()
         {
-            if (gpuSimulation == null)
+            if (stunStatus.IsStunned)
             {
-                throw new InvalidOperationException(
-                    "GPU Simulation is not assigned."
-                );
+                return false;
             }
 
             var sourceSimulation = gpuSimulation.SourceSimulation;
@@ -72,6 +73,24 @@ namespace Gameplay
 #endif
 
             return waveGenerationRequested;
+        }
+        
+        private void Awake()
+        {
+            ValidateReferences();
+        }
+        
+        private void ValidateReferences()
+        {
+            if (gpuSimulation == null)
+            {
+                throw new InvalidOperationException("GPU Simulation is not assigned.");
+            }
+
+            if (stunStatus == null)
+            {
+                throw new InvalidOperationException("Stun Status is not assigned.");
+            }
         }
         
         private void OnValidate()

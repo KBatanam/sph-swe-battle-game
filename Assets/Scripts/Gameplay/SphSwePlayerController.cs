@@ -16,6 +16,9 @@ namespace Gameplay
         [SerializeField, Required]
         private SphSweGpuWaveGenerator waveGenerator;
 
+        [SerializeField, Required]
+        private SphSweLightningCannon lightningCannon;
+
         [Header("Input Actions")]
 
         [SerializeField, Required]
@@ -23,6 +26,9 @@ namespace Gameplay
 
         [SerializeField, Required]
         private InputActionReference generateWaveAction;
+
+        [SerializeField, Required]
+        private InputActionReference useSpecialAttackAction;
 
         private void Awake()
         {
@@ -34,24 +40,30 @@ namespace Gameplay
             movementAction.action.Enable();
             generateWaveAction.action.performed += OnGenerateWaveActionPerformed;
             generateWaveAction.action.Enable();
+            useSpecialAttackAction.action.performed += OnUseSpecialAttackActionPerformed;
+            useSpecialAttackAction.action.Enable();
         }
 
         private void Update()
         {
             var movementInput = movementAction.action.ReadValue<Vector2>();
-            characterMotor.SetHorizontalDirection(movementInput.x);
+
+            characterMotor.SetHorizontalDirection(
+                movementInput.x
+            );
         }
 
         private void OnDisable()
         {
             characterMotor.SetHorizontalDirection(0f);
             generateWaveAction.action.performed -= OnGenerateWaveActionPerformed;
+            useSpecialAttackAction.action.performed -= OnUseSpecialAttackActionPerformed;
             movementAction.action.Disable();
             generateWaveAction.action.Disable();
+            useSpecialAttackAction.action.Disable();
         }
 
-        private void OnGenerateWaveActionPerformed(
-            InputAction.CallbackContext context)
+        private void OnGenerateWaveActionPerformed(InputAction.CallbackContext context)
         {
             var waveGenerationRequested = waveGenerator.TryGenerateWave();
 
@@ -73,6 +85,21 @@ namespace Gameplay
 #endif
         }
 
+        private void OnUseSpecialAttackActionPerformed(InputAction.CallbackContext context)
+        {
+            var lightningCannonFired = lightningCannon.TryFireLightningCannon();
+
+#if UNITY_EDITOR
+            if (lightningCannonFired)
+            {
+                Debug.Log(
+                    "Lightning cannon fired.",
+                    this
+                );
+            }
+#endif
+        }
+
         private void ValidateReferences()
         {
             if (characterMotor == null)
@@ -85,6 +112,11 @@ namespace Gameplay
                 throw new InvalidOperationException("Wave Generator is not assigned.");
             }
 
+            if (lightningCannon == null)
+            {
+                throw new InvalidOperationException("Lightning Cannon is not assigned.");
+            }
+
             if (movementAction == null)
             {
                 throw new InvalidOperationException("Movement Action is not assigned.");
@@ -93,6 +125,11 @@ namespace Gameplay
             if (generateWaveAction == null)
             {
                 throw new InvalidOperationException("Generate Wave Action is not assigned.");
+            }
+
+            if (useSpecialAttackAction == null)
+            {
+                throw new InvalidOperationException("Use Special Attack Action is not assigned.");
             }
         }
     }
