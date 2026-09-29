@@ -18,6 +18,7 @@ namespace Gpu
         public GraphicsBuffer SortedParticleIndexBuffer { get; }
         public GraphicsBuffer MinimumTimeStepBitsBuffer { get; }
         public GraphicsBuffer SimulationTimeStateBuffer { get; }
+        public GraphicsBuffer SurfaceSampleBuffer { get; }
         
         public int ParticleCount { get; }
         public int CellCount { get; }
@@ -57,6 +58,7 @@ namespace Gpu
             SortedParticleIndexBuffer = CreateUIntBuffer(particleCount);
             MinimumTimeStepBitsBuffer = CreateUIntBuffer(1);
             SimulationTimeStateBuffer = CreateBuffer(1, SphSweGpuSimulationTimeState.Stride);
+            SurfaceSampleBuffer = CreateBuffer(1, SphSweGpuSurfaceSample.Stride);
         }
         
         private static GraphicsBuffer CreateUIntBuffer(int elementCount)
@@ -86,6 +88,7 @@ namespace Gpu
             SortedParticleIndexBuffer.Dispose();
             MinimumTimeStepBitsBuffer.Dispose();
             SimulationTimeStateBuffer.Dispose();
+            SurfaceSampleBuffer.Dispose();
 
             disposed = true;
         }

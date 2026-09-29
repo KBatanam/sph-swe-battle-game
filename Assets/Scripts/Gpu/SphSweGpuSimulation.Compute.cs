@@ -43,6 +43,9 @@ namespace Gpu
         private static readonly int WaveImpulseRadiusPropertyId = Shader.PropertyToID("_WaveImpulseRadius");
         private static readonly int WaveImpulseStrengthPropertyId = Shader.PropertyToID("_WaveImpulseStrength");
         
+        private static readonly int SurfaceSamplesPropertyId = Shader.PropertyToID("_SurfaceSamples");
+        private static readonly int SurfaceSampleSimulationPositionPropertyId = Shader.PropertyToID("_SurfaceSampleSimulationPosition");
+        
         private int clearCellParticleCountsKernelIndex;
         private int registerParticlesInCellsKernelIndex;
         private int scanCellParticleCountsByGroupKernelIndex;
@@ -60,6 +63,7 @@ namespace Gpu
         private int finalizeSimulationTimeStepKernelIndex;
         private int completeSimulationSubstepKernelIndex;
         private int applyWaveImpulseKernelIndex;
+        private int sampleFluidSurfaceKernelIndex;
 
         private void InitializeKernelIndices()
         {
@@ -80,6 +84,7 @@ namespace Gpu
             finalizeSimulationTimeStepKernelIndex = simulationComputeShader.FindKernel("FinalizeSimulationTimeStep");
             completeSimulationSubstepKernelIndex = simulationComputeShader.FindKernel("CompleteSimulationSubstep");
             applyWaveImpulseKernelIndex = simulationComputeShader.FindKernel("ApplyWaveImpulse");
+            sampleFluidSurfaceKernelIndex = simulationComputeShader.FindKernel("SampleFluidSurface");
         }
 
         /// <summary>
@@ -266,6 +271,31 @@ namespace Gpu
                 applyWaveImpulseKernelIndex,
                 ParticlesPropertyId,
                 gpuBuffers.ParticleBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                sampleFluidSurfaceKernelIndex,
+                ParticlesPropertyId,
+                gpuBuffers.ParticleBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                sampleFluidSurfaceKernelIndex,
+                CellParticleCountsPropertyId,
+                gpuBuffers.CellParticleCountBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                sampleFluidSurfaceKernelIndex,
+                CellParticleStartIndicesPropertyId,
+                gpuBuffers.CellParticleStartIndexBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                sampleFluidSurfaceKernelIndex,
+                SortedParticleIndicesPropertyId,
+                gpuBuffers.SortedParticleIndexBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                sampleFluidSurfaceKernelIndex,
+                SurfaceSamplesPropertyId,
+                gpuBuffers.SurfaceSampleBuffer
             );
         }
         
