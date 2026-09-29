@@ -1620,6 +1620,7 @@ GameObject:
   - component: {fileID: 1020476350}
   - component: {fileID: 1020476355}
   - component: {fileID: 1020476356}
+  - component: {fileID: 1020476357}
   m_Layer: 0
   m_Name: EnemyCube
   m_TagString: Untagged
@@ -1674,7 +1675,7 @@ MonoBehaviour:
   gpuSimulation: {fileID: 734073337}
   stunStatus: {fileID: 1020476355}
   waveImpulseRadius: 0.5
-  waveImpulseStrength: 1.5
+  waveImpulseStrength: 2
 --- !u!65 &1020476352
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -1786,6 +1787,30 @@ MonoBehaviour:
   hitDetectionLayerMask:
     serializedVersion: 2
     m_Bits: 4294967295
+--- !u!114 &1020476357
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1020476348}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0fdefd9bb027d5549b23fc33d349eba0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.SphSweEnemyController
+  simulation: {fileID: 734073335}
+  characterMotor: {fileID: 1020476350}
+  waveGenerator: {fileID: 1020476351}
+  lightningCannon: {fileID: 1020476356}
+  playerTransform: {fileID: 1140057371}
+  objectiveBall: {fileID: 641263226}
+  attackHorizontalAlignmentTolerance: 0.2
+  waveHorizontalAlignmentTolerance: 0.45
+  patrolBoundaryInset: 0.25
+  waveDefenseActivationDistanceBeforeCenter: 0.75
+  minimumWaveGenerationInterval: 0.08
+  maximumWaveGenerationInterval: 0.14
 --- !u!1 &1140057365
 GameObject:
   m_ObjectHideFlags: 0

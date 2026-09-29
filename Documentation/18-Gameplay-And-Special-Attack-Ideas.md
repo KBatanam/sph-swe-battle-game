@@ -16,3 +16,42 @@
 3. 波の大きさアップ
 
 必殺技の具体的な効果量と持続時間は、実際のゲームプレイを確認しながら調整する。
+
+## 簡易Enemy AI
+
+Enemyは、既存の移動、波生成および雷砲コンポーネントを`SphSweEnemyController`から操作する。Player入力とAIで実際の行動処理を共有し、将来ネットワーク入力へ置き換える場合も同じ公開APIを利用する。
+
+行動の優先順位は次のとおりとする。
+
+1. 雷砲のクールタイムが完了したら、PlayerのX位置へ移動する。照準が許容範囲内に入った時点で雷砲を発射する。
+2. 雷砲を発射できず、目的球が中央へ近づいた場合は、Enemy側へ入る前から目的球のX位置へ移動する。
+3. 目的球が波の影響範囲へ入ったら、短いランダム間隔で波を繰り返し発生させ、Player側へ押し返す。
+4. 攻撃と防御のどちらも必要ない間は、移動可能範囲内からランダムなX目標を選び、その目標間を巡回する。
+
+硬直中の移動、波生成および雷砲発射の拒否は、それぞれの既存コンポーネントが担当する。AI側で同じ硬直判定を重複して持たない。
+
+初期調整値：
+
+```text
+Attack Horizontal Alignment Tolerance: 0.2
+Wave Horizontal Alignment Tolerance: 0.45
+Patrol Boundary Inset: 0.25
+Wave Defense Activation Distance Before Center: 0.75
+Minimum Wave Generation Interval: 0.08
+Maximum Wave Generation Interval: 0.14
+Enemy Wave Impulse Strength: 2
+```
+
+このAIは対戦挙動を確認するための簡易実装であり、難易度調整、予測照準および行動パターンの高度化は今後のゲームプレイ結果に応じて行う。
+
+### 動作確認
+
+2026年9月30日にUnity Editor上で次を確認した。
+
+- Enemyが左右へ移動し、X座標が初期値`0`から変化する。
+- 目的球がEnemy側にある間、EnemyからPlayer方向である`-Z`へ波を繰り返し発生させる。
+- 雷砲のクールタイム完了後、Playerへ横方向の照準を合わせて発射する。
+- 雷砲がPlayerへ命中し、1秒の硬直が適用される。
+- Consoleに例外、コンパイルエラーおよび実行時Warningが発生しない。
+
+防御開始位置、波間隔、横方向の許容範囲および波強度を調整した後の再検証では、約30秒間に防御波を8回発生させ、目的球をEnemy側へ通さずPlayer側の`Z=-2.49`まで押し戻した。Enemyの横移動とPlayerへの雷砲命中も継続して確認した。
