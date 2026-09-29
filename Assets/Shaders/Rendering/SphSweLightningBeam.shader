@@ -55,7 +55,7 @@ Shader "SPH-SWE/Lightning Beam"
                 FragmentInput output;
                 output.positionCS = TransformObjectToHClip(input.positionOS);
                 output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
-                output.uv.x += _Time.y * _ScrollSpeed;
+                output.uv.x -= _Time.y * _ScrollSpeed;
                 return output;
             }
 

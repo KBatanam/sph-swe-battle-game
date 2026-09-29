@@ -1803,6 +1803,7 @@ GameObject:
   - component: {fileID: 1140057372}
   - component: {fileID: 1140057374}
   - component: {fileID: 1140057375}
+  - component: {fileID: 1140057376}
   m_Layer: 0
   m_Name: PlayerCube
   m_TagString: Untagged
@@ -1987,6 +1988,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3b501343a595b3c468702a8237eacdc1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Gameplay.SphSweStunStatus
+--- !u!114 &1140057376
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1140057365}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 48936b43274ff274ba2b7af9698362f6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Rendering.SphSwePlayerStunScreenEffectController
+  playerStunStatus: {fileID: 1140057375}
+  stunScreenEffectMaterial: {fileID: 2100000, guid: 28073886f0828e3468d9a88346558e88, type: 2}
 --- !u!1 &1331005382
 GameObject:
   m_ObjectHideFlags: 0
