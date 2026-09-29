@@ -287,7 +287,7 @@ GPU関連のMenuItemテスト7件は2026年9月29日にすべて成功した。�
 
 PlayerとEnemyの雷砲、硬直状態、クールタイム表示およびPlayer硬直中の画面端雷エフェクトまで実装した。画面エフェクトは独自のURP Renderer FeatureとRender GraphのBlit Passで適用する。
 
-簡易Enemy AIとして`SphSweEnemyController`を追加した。雷砲使用可能時はPlayerへ横方向の照準を合わせて発射する。目的球が中央へ近づいた時点で早めに防御を開始し、波の影響範囲へ入ったら短い間隔で繰り返し波を発生させる。それ以外の時間は移動可能範囲内のランダムなX目標間を巡回する。
+簡易Enemy AIとして`EnemyController`を追加した。雷砲使用可能時はPlayerへ横方向の照準を合わせて発射する。目的球が中央へ近づいた時点で早めに防御を開始し、波の影響範囲へ入ったら短い間隔で繰り返し波を発生させる。それ以外の時間は移動可能範囲内のランダムなX目標間を巡回する。
 
 詳細な行動優先順位と初期調整値は`Documentation/18-Gameplay-And-Special-Attack-Ideas.md`を参照する。
 

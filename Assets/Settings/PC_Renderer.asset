@@ -66,8 +66,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 57a0e4c9fb89c774094f4ac676a3465e, type: 3}
-  m_Name: SphSweStunScreenRendererFeature
-  m_EditorClassIdentifier: Assembly-CSharp::Rendering.SphSweStunScreenRendererFeature
+  m_Name: StunScreenRendererFeature
+  m_EditorClassIdentifier: Assembly-CSharp::Rendering.StunScreenRendererFeature
   m_Active: 1
   stunScreenEffectMaterial: {fileID: 2100000, guid: 28073886f0828e3468d9a88346558e88, type: 2}
 --- !u!114 &7833122117494664109

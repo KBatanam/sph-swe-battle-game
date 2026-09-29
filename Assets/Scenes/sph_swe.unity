@@ -273,7 +273,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4d3b66742078c9f42bd04994db0fa4df, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Rendering.SphSweLightningBeamEffect
+  m_EditorClassIdentifier: Assembly-CSharp::Rendering.LightningBeamEffect
   lightningBeamRenderer: {fileID: 43109519}
   firingOrigin: {fileID: 74114872}
   beamStartOffset: 0
@@ -5647,7 +5647,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1e19fa0b3d5a26943aae779896f84e6a, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::UserInterface.SphSweSpecialAttackCooldownDisplay
+  m_EditorClassIdentifier: Assembly-CSharp::UserInterface.SpecialAttackCooldownDisplay
   lightningCannon: {fileID: 1020476356}
   characterName: ENEMY
   cooldownTextColor: {r: 1, g: 1, b: 1, a: 1}
@@ -5881,7 +5881,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: db7f686212e2da543805839d18020a4a, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.SphSweObjectiveBall
+  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.ObjectiveBall
   gpuSimulation: {fileID: 734073337}
   groundHeight: 0
   fluidDepthHeightScale: 1
@@ -6147,7 +6147,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1e19fa0b3d5a26943aae779896f84e6a, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::UserInterface.SphSweSpecialAttackCooldownDisplay
+  m_EditorClassIdentifier: Assembly-CSharp::UserInterface.SpecialAttackCooldownDisplay
   lightningCannon: {fileID: 1140057374}
   characterName: PLAYER
   cooldownTextColor: {r: 1, g: 1, b: 1, a: 1}
@@ -6324,7 +6324,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4d3b66742078c9f42bd04994db0fa4df, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Rendering.SphSweLightningBeamEffect
+  m_EditorClassIdentifier: Assembly-CSharp::Rendering.LightningBeamEffect
   lightningBeamRenderer: {fileID: 963676949}
   firingOrigin: {fileID: 147438402}
   beamStartOffset: 0
@@ -6479,6 +6479,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 147438402}
+  - {fileID: 1849375573}
   m_Father: {fileID: 1395987986}
   m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
 --- !u!114 &1020476350
@@ -6492,7 +6493,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5dd2e0ef6ee8d2343ad6e52cd44a281d, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.SphSweBattleCharacterMotor
+  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.BattleCharacterMotor
   simulation: {fileID: 734073335}
   stunStatus: {fileID: 1020476355}
   horizontalMovementSpeed: 4
@@ -6508,7 +6509,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 85bb5101bc68f224f8ca0c3c8a81f96d, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.SphSweGpuWaveGenerator
+  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.WaveGenerator
   gpuSimulation: {fileID: 734073337}
   stunStatus: {fileID: 1020476355}
   waveImpulseRadius: 0.5
@@ -6602,7 +6603,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3b501343a595b3c468702a8237eacdc1, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.SphSweStunStatus
+  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.StunStatus
 --- !u!114 &1020476356
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6614,7 +6615,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 17693ade0faf3754c890f01e77ade383, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.SphSweLightningCannon
+  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.LightningCannon
   lightningBeamEffect: {fileID: 963676948}
   stunStatus: {fileID: 1020476355}
   cooldownDuration: 5
@@ -6635,7 +6636,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0fdefd9bb027d5549b23fc33d349eba0, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.SphSweEnemyController
+  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.EnemyController
   simulation: {fileID: 734073335}
   characterMotor: {fileID: 1020476350}
   waveGenerator: {fileID: 1020476351}
@@ -6659,9 +6660,10 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f075a8166d5e5cd4398ccdabcbb5bddd, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Rendering.SphSweCharacterStunVisualController
+  m_EditorClassIdentifier: Assembly-CSharp::Rendering.CharacterStunVisualController
   stunStatus: {fileID: 1020476355}
   characterRenderer: {fileID: 1020476353}
+  characterStunParticleSystem: {fileID: 1849375574}
 --- !u!1 &1140057365
 GameObject:
   m_ObjectHideFlags: 0
@@ -6699,7 +6701,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 85bb5101bc68f224f8ca0c3c8a81f96d, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.SphSweGpuWaveGenerator
+  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.WaveGenerator
   gpuSimulation: {fileID: 734073337}
   stunStatus: {fileID: 1140057375}
   waveImpulseRadius: 0.5
@@ -6810,7 +6812,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5dd2e0ef6ee8d2343ad6e52cd44a281d, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.SphSweBattleCharacterMotor
+  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.BattleCharacterMotor
   simulation: {fileID: 734073335}
   stunStatus: {fileID: 1140057375}
   horizontalMovementSpeed: 4
@@ -6826,7 +6828,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 38f7b85a5089e304e906fc2925f52f7b, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.SphSwePlayerController
+  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.PlayerController
   characterMotor: {fileID: 1140057372}
   waveGenerator: {fileID: 1140057366}
   lightningCannon: {fileID: 1140057374}
@@ -6844,7 +6846,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 17693ade0faf3754c890f01e77ade383, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.SphSweLightningCannon
+  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.LightningCannon
   lightningBeamEffect: {fileID: 43109521}
   stunStatus: {fileID: 1140057375}
   cooldownDuration: 5
@@ -6865,7 +6867,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3b501343a595b3c468702a8237eacdc1, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.SphSweStunStatus
+  m_EditorClassIdentifier: Assembly-CSharp::Gameplay.StunStatus
 --- !u!114 &1140057376
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6877,7 +6879,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 48936b43274ff274ba2b7af9698362f6, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Rendering.SphSwePlayerStunScreenEffectController
+  m_EditorClassIdentifier: Assembly-CSharp::Rendering.PlayerStunScreenEffectController
   playerStunStatus: {fileID: 1140057375}
   stunScreenEffectMaterial: {fileID: 2100000, guid: 28073886f0828e3468d9a88346558e88, type: 2}
 --- !u!114 &1140057377
@@ -6891,9 +6893,10 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f075a8166d5e5cd4398ccdabcbb5bddd, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Rendering.SphSweCharacterStunVisualController
+  m_EditorClassIdentifier: Assembly-CSharp::Rendering.CharacterStunVisualController
   stunStatus: {fileID: 1140057375}
   characterRenderer: {fileID: 1140057369}
+  characterStunParticleSystem: {fileID: 100313647}
 --- !u!1 &1331005382
 GameObject:
   m_ObjectHideFlags: 0
@@ -7063,6 +7066,73 @@ Transform:
   - {fileID: 641263222}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1001 &1849375572
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 1020476349}
+    m_Modifications:
+    - target: {fileID: 1195602343482037089, guid: a7fef46feae79c14a8fed22870d2aa21, type: 3}
+      propertyPath: m_Name
+      value: StunParticles
+      objectReference: {fileID: 0}
+    - target: {fileID: 5326087570163636575, guid: a7fef46feae79c14a8fed22870d2aa21, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5326087570163636575, guid: a7fef46feae79c14a8fed22870d2aa21, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5326087570163636575, guid: a7fef46feae79c14a8fed22870d2aa21, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5326087570163636575, guid: a7fef46feae79c14a8fed22870d2aa21, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5326087570163636575, guid: a7fef46feae79c14a8fed22870d2aa21, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5326087570163636575, guid: a7fef46feae79c14a8fed22870d2aa21, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5326087570163636575, guid: a7fef46feae79c14a8fed22870d2aa21, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5326087570163636575, guid: a7fef46feae79c14a8fed22870d2aa21, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5326087570163636575, guid: a7fef46feae79c14a8fed22870d2aa21, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5326087570163636575, guid: a7fef46feae79c14a8fed22870d2aa21, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: a7fef46feae79c14a8fed22870d2aa21, type: 3}
+--- !u!4 &1849375573 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 5326087570163636575, guid: a7fef46feae79c14a8fed22870d2aa21, type: 3}
+  m_PrefabInstance: {fileID: 1849375572}
+  m_PrefabAsset: {fileID: 0}
+--- !u!198 &1849375574 stripped
+ParticleSystem:
+  m_CorrespondingSourceObject: {fileID: 3679400481607422501, guid: a7fef46feae79c14a8fed22870d2aa21, type: 3}
+  m_PrefabInstance: {fileID: 1849375572}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
