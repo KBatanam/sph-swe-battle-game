@@ -110,3 +110,20 @@ Render Graphは有効のまま使用する。
 
 ゲームプレイ側がSPH-SWE実装を参照する場合でも、その型自身の責務がゲームルールであれば`SphSwe`は付けない。これにより、将来シミュレーション方式や内部実装を変更してもゲームプレイ側の名称を維持できる。
 
+## 名前空間とAssetフォルダ
+
+プロジェクト固有のC#コードは`SphSwe`をルート名前空間とし、機能別フォルダをサブ名前空間へ対応させる。
+
+```text
+Assets/SphSwe/Scripts/Core          → SphSwe.Core
+Assets/SphSwe/Scripts/Gameplay      → SphSwe.Gameplay
+Assets/SphSwe/Scripts/Gpu           → SphSwe.Gpu
+Assets/SphSwe/Scripts/Rendering     → SphSwe.Rendering
+Assets/SphSwe/Scripts/Simulation    → SphSwe.Simulation
+Assets/SphSwe/Scripts/UserInterface → SphSwe.UserInterface
+Assets/SphSwe/Scripts/Validation    → SphSwe.Validation
+Assets/SphSwe/Editor                → SphSwe.Editor
+```
+
+`Plugins`、`ThirdParty`、`TextMesh Pro`、`ZString`などの外部コードには、このルールを適用しない。
+
