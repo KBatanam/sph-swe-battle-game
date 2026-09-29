@@ -13,6 +13,9 @@ namespace Rendering
         [SerializeField, Required]
         private Renderer characterRenderer;
 
+        [SerializeField, Required]
+        private ParticleSystem characterStunParticleSystem;
+
         private MaterialPropertyBlock materialPropertyBlock;
 
         private void OnEnable()
@@ -20,21 +23,27 @@ namespace Rendering
             materialPropertyBlock ??= new MaterialPropertyBlock();
 
             stunStatus.StunStateChanged += HandleStunStateChanged;
-            SetStunEffectEnabled(stunStatus.IsStunned);
+            SetStunVisualEnabled(stunStatus.IsStunned);
         }
 
         private void OnDisable()
         {
             stunStatus.StunStateChanged -= HandleStunStateChanged;
-            SetStunEffectEnabled(false);
+            SetStunVisualEnabled(false);
         }
 
         private void HandleStunStateChanged(bool isStunned)
         {
-            SetStunEffectEnabled(isStunned);
+            SetStunVisualEnabled(isStunned);
         }
 
-        private void SetStunEffectEnabled(bool isEnabled)
+        private void SetStunVisualEnabled(bool isEnabled)
+        {
+            SetCharacterEmissionEnabled(isEnabled);
+            SetCharacterStunParticlesEnabled(isEnabled);
+        }
+
+        private void SetCharacterEmissionEnabled(bool isEnabled)
         {
             characterRenderer.GetPropertyBlock(materialPropertyBlock);
 
@@ -44,6 +53,20 @@ namespace Rendering
             );
 
             characterRenderer.SetPropertyBlock(materialPropertyBlock);
+        }
+
+        private void SetCharacterStunParticlesEnabled(bool isEnabled)
+        {
+            if (isEnabled)
+            {
+                characterStunParticleSystem.Play(true);
+                return;
+            }
+
+            characterStunParticleSystem.Stop(
+                true,
+                ParticleSystemStopBehavior.StopEmittingAndClear
+            );
         }
     }
 }
