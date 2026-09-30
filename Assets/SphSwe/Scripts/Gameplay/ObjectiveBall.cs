@@ -97,11 +97,7 @@ namespace SphSwe.Gameplay
 
             localPosition.x += horizontalVelocity.x * deltaTime;
             localPosition.z += horizontalVelocity.y * deltaTime;
-            var targetSurfaceHeight =
-                groundHeight
-                + latestSurfaceSample.FluidDepth
-                * fluidDepthHeightScale
-                + surfaceHeightOffset;
+            var targetSurfaceHeight = groundHeight + latestSurfaceSample.FluidDepth * fluidDepthHeightScale + surfaceHeightOffset;
 
             var heightInterpolationRate = 1f - Mathf.Exp(-surfaceHeightFollowingSpeed * deltaTime);
             localPosition.y = Mathf.Lerp(localPosition.y, targetSurfaceHeight, heightInterpolationRate);
@@ -145,6 +141,27 @@ namespace SphSwe.Gameplay
             {
                 horizontalVelocity = horizontalVelocity.normalized * maximumHorizontalVelocity;
             }
+        }
+        
+        /// <summary>
+        /// 目的球をシミュレーション領域の中央へ戻し、
+        /// 波から受け取って保持していた水平速度をリセットする。
+        /// </summary>
+        public void ResetToSimulationCenter()
+        {
+            var simulation = gpuSimulation.SourceSimulation;
+            var simulationTransform = simulation.transform;
+            var localPosition = simulationTransform.InverseTransformPoint(transform.position);
+
+            localPosition.x = simulation.SimulationCenter.x;
+            localPosition.y = groundHeight + calmFluidDepth * fluidDepthHeightScale + surfaceHeightOffset;
+            localPosition.z = simulation.SimulationCenter.y;
+
+            transform.position = simulationTransform.TransformPoint(localPosition);
+
+            horizontalVelocity = Vector2.zero;
+            latestSurfaceSample = default;
+            validSurfaceSampleReceived = false;
         }
         
         private void OnValidate()
