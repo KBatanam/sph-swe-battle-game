@@ -845,7 +845,7 @@ MonoBehaviour:
   surfaceHeightFollowingSpeed: 15
   calmFluidDepth: 1
   waveEnergyFluxAccelerationScale: 25000
-  horizontalVelocityDrag: 1
+  horizontalVelocityDrag: 0.4
   maximumHorizontalVelocity: 2
 --- !u!1 &734073334
 GameObject:
@@ -1419,6 +1419,10 @@ PrefabInstance:
       propertyPath: gpuSimulation
       value: 
       objectReference: {fileID: 734073337}
+    - target: {fileID: 642935569913117800, guid: f360adb474bcd424e8011a4ccd9968c0, type: 3}
+      propertyPath: waveImpulseStrength
+      value: 3
+      objectReference: {fileID: 0}
     - target: {fileID: 714114323912485180, guid: f360adb474bcd424e8011a4ccd9968c0, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -1462,6 +1466,14 @@ PrefabInstance:
     - target: {fileID: 4125875441369395985, guid: f360adb474bcd424e8011a4ccd9968c0, type: 3}
       propertyPath: m_Name
       value: PlayerCube
+      objectReference: {fileID: 0}
+    - target: {fileID: 5588397617231413737, guid: f360adb474bcd424e8011a4ccd9968c0, type: 3}
+      propertyPath: stunDuration
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 5588397617231413737, guid: f360adb474bcd424e8011a4ccd9968c0, type: 3}
+      propertyPath: cooldownDuration
+      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 5930794283149725415, guid: f360adb474bcd424e8011a4ccd9968c0, type: 3}
       propertyPath: simulation
@@ -1691,6 +1703,14 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 1144074823}
     - target: {fileID: 4408640398835736011, guid: 3fc0757ede70655448dfd53f25881069, type: 3}
+      propertyPath: stunDuration
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 4408640398835736011, guid: 3fc0757ede70655448dfd53f25881069, type: 3}
+      propertyPath: cooldownDuration
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 4408640398835736011, guid: 3fc0757ede70655448dfd53f25881069, type: 3}
       propertyPath: lightningBeamEffect
       value: 
       objectReference: {fileID: 1447003638}
@@ -1698,6 +1718,10 @@ PrefabInstance:
       propertyPath: gpuSimulation
       value: 
       objectReference: {fileID: 734073337}
+    - target: {fileID: 7267665182388856566, guid: 3fc0757ede70655448dfd53f25881069, type: 3}
+      propertyPath: waveImpulseStrength
+      value: 3
+      objectReference: {fileID: 0}
     - target: {fileID: 8085068804389274552, guid: 3fc0757ede70655448dfd53f25881069, type: 3}
       propertyPath: simulation
       value: 

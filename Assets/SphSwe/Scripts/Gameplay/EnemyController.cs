@@ -1,6 +1,7 @@
 using System;
 using SphSwe.Simulation;
 using UnityEngine;
+using UnityEngine.Serialization;
 using SphSwe.Validation;
 
 namespace SphSwe.Gameplay
@@ -36,10 +37,28 @@ namespace SphSwe.Gameplay
         [SerializeField, Min(0f)]
         private float waveHorizontalAlignmentTolerance = 0.45f;
 
+        [FormerlySerializedAs("patrolBoundaryInset")]
         [SerializeField, Min(0f)]
-        private float patrolBoundaryInset = 0.25f;
+        private float horizontalBoundaryInset = 0.25f;
 
-        [Header("Wave Defense")]
+        [Header("Lightning Attack")]
+
+        [SerializeField, Min(0f)]
+        private float minimumLightningAimDuration = 0.8f;
+
+        [SerializeField, Min(0f)]
+        private float maximumLightningAimDuration = 1.1f;
+
+        [SerializeField, Range(0f, 1f)]
+        private float lightningAttackAccuracy = 0.6f;
+
+        [SerializeField, Min(0f)]
+        private float minimumLightningMissOffset = 0.9f;
+
+        [SerializeField, Min(0f)]
+        private float maximumLightningMissOffset = 1.4f;
+
+        [Header("Wave Generation")]
 
         [SerializeField, Min(0f)]
         private float waveDefenseActivationDistanceBeforeCenter = 0.75f;
@@ -50,13 +69,20 @@ namespace SphSwe.Gameplay
         [SerializeField, Min(0.01f)]
         private float maximumWaveGenerationInterval = 0.14f;
 
+        [SerializeField, Min(0.01f)]
+        private float minimumOffensiveWaveGenerationInterval = 0.3f;
+
+        [SerializeField, Min(0.01f)]
+        private float maximumOffensiveWaveGenerationInterval = 0.5f;
+
         private float remainingWaveGenerationInterval;
-        private float patrolTargetPositionX;
+        private float remainingLightningAimDuration;
+        private float lockedLightningTargetPositionX;
+        private bool isPreparingLightningAttack;
 
         private void Awake()
         {
             ValidateReferences();
-            ChooseNextPatrolTarget();
         }
 
         private void Update()
@@ -70,7 +96,7 @@ namespace SphSwe.Gameplay
                 objectiveBallSimulationPosition
             );
 
-            UpdateWaveDefense(
+            UpdateWaveGeneration(
                 Time.deltaTime,
                 isObjectiveBallOnEnemySide,
                 enemySimulationPosition.x,
@@ -79,23 +105,20 @@ namespace SphSwe.Gameplay
 
             if (lightningCannon.IsReady)
             {
-                AimAtAndAttackPlayer(
+                UpdateLightningAttack(
+                    Time.deltaTime,
                     enemySimulationPosition.x,
                     playerSimulationPosition.x
                 );
                 return;
             }
 
-            if (isObjectiveBallOnEnemySide)
-            {
-                MoveTowardHorizontalPosition(
-                    enemySimulationPosition.x,
-                    objectiveBallSimulationPosition.x
-                );
-                return;
-            }
+            isPreparingLightningAttack = false;
 
-            UpdatePatrol(enemySimulationPosition.x);
+            MoveTowardHorizontalPosition(
+                enemySimulationPosition.x,
+                objectiveBallSimulationPosition.x
+            );
         }
 
         private bool IsObjectiveBallOnEnemySide(
@@ -118,18 +141,12 @@ namespace SphSwe.Gameplay
                    >= -waveDefenseActivationDistanceBeforeCenter;
         }
 
-        private void UpdateWaveDefense(
+        private void UpdateWaveGeneration(
             float deltaTime,
             bool isObjectiveBallOnEnemySide,
             float enemyPositionX,
             float objectiveBallPositionX)
         {
-            if (!isObjectiveBallOnEnemySide)
-            {
-                remainingWaveGenerationInterval = 0f;
-                return;
-            }
-
             remainingWaveGenerationInterval -= deltaTime;
 
             if (remainingWaveGenerationInterval > 0f
@@ -142,25 +159,117 @@ namespace SphSwe.Gameplay
                 return;
             }
 
-            waveGenerator.TryGenerateWave();
-            remainingWaveGenerationInterval = UnityEngine.Random.Range(
-                minimumWaveGenerationInterval,
-                maximumWaveGenerationInterval
-            );
+            if (!waveGenerator.TryGenerateWave())
+            {
+                return;
+            }
+
+            remainingWaveGenerationInterval = isObjectiveBallOnEnemySide
+                ? UnityEngine.Random.Range(
+                    minimumWaveGenerationInterval,
+                    maximumWaveGenerationInterval
+                )
+                : UnityEngine.Random.Range(
+                    minimumOffensiveWaveGenerationInterval,
+                    maximumOffensiveWaveGenerationInterval
+                );
         }
 
-        private void AimAtAndAttackPlayer(float enemyPositionX, float playerPositionX)
+        private void UpdateLightningAttack(
+            float deltaTime,
+            float enemyPositionX,
+            float playerPositionX)
         {
-            MoveTowardHorizontalPosition(enemyPositionX, playerPositionX);
-
-            if (IsHorizontallyAligned(
-                enemyPositionX,
-                playerPositionX,
-                attackHorizontalAlignmentTolerance
-            ))
+            if (!isPreparingLightningAttack)
             {
-                lightningCannon.TryFireLightningCannon();
+                BeginLightningAttack(playerPositionX);
             }
+
+            MoveTowardHorizontalPosition(
+                enemyPositionX,
+                lockedLightningTargetPositionX
+            );
+
+            remainingLightningAimDuration -= deltaTime;
+
+            if (remainingLightningAimDuration > 0f ||
+                !IsHorizontallyAligned(
+                    enemyPositionX,
+                    lockedLightningTargetPositionX,
+                    attackHorizontalAlignmentTolerance
+                ))
+            {
+                return;
+            }
+
+            if (lightningCannon.TryFireLightningCannon())
+            {
+                isPreparingLightningAttack = false;
+            }
+        }
+
+        /// <summary>
+        /// 雷砲の照準位置を現在のPlayer位置付近に固定する。
+        /// 発射まで照準位置を更新しないため、Playerは予告時間中に回避できる。
+        /// </summary>
+        private void BeginLightningAttack(float playerPositionX)
+        {
+            var halfSimulationAreaWidth =
+                simulation.SimulationAreaSize.x * 0.5f;
+
+            var boundaryInset = Mathf.Min(
+                horizontalBoundaryInset,
+                halfSimulationAreaWidth
+            );
+
+            var minimumAttackPositionX =
+                simulation.SimulationCenter.x
+                - halfSimulationAreaWidth
+                + boundaryInset;
+
+            var maximumAttackPositionX =
+                simulation.SimulationCenter.x
+                + halfSimulationAreaWidth
+                - boundaryInset;
+
+            var aimOffset = CalculateLightningAimOffset();
+
+            lockedLightningTargetPositionX = Mathf.Clamp(
+                playerPositionX + aimOffset,
+                minimumAttackPositionX,
+                maximumAttackPositionX
+            );
+
+            remainingLightningAimDuration = UnityEngine.Random.Range(
+                minimumLightningAimDuration,
+                maximumLightningAimDuration
+            );
+
+            isPreparingLightningAttack = true;
+        }
+
+        /// <summary>
+        /// 命中を狙う場合はPlayerの現在位置をそのまま照準位置とし、
+        /// 外す場合は当たり判定の幅を十分に超える位置へ照準をずらす。
+        /// 命中を狙った場合も照準位置は固定されるため、予告時間中に回避できる。
+        /// </summary>
+        private float CalculateLightningAimOffset()
+        {
+            if (UnityEngine.Random.value <= lightningAttackAccuracy)
+            {
+                return 0f;
+            }
+
+            var missDirection = UnityEngine.Random.value < 0.5f
+                ? -1f
+                : 1f;
+
+            var missDistance = UnityEngine.Random.Range(
+                minimumLightningMissOffset,
+                maximumLightningMissOffset
+            );
+
+            return missDirection * missDistance;
         }
 
         private void MoveTowardHorizontalPosition(float currentPositionX, float targetPositionX)
@@ -184,35 +293,6 @@ namespace SphSwe.Gameplay
             return Mathf.Abs(targetPositionX - currentPositionX) <= alignmentTolerance;
         }
 
-        private void UpdatePatrol(float enemyPositionX)
-        {
-            if (Mathf.Abs(patrolTargetPositionX - enemyPositionX)
-                <= attackHorizontalAlignmentTolerance)
-            {
-                ChooseNextPatrolTarget();
-            }
-
-            MoveTowardHorizontalPosition(
-                enemyPositionX,
-                patrolTargetPositionX
-            );
-        }
-
-        private void ChooseNextPatrolTarget()
-        {
-            var halfSimulationAreaWidth = simulation.SimulationAreaSize.x * 0.5f;
-            var boundaryInset = Mathf.Min(patrolBoundaryInset, halfSimulationAreaWidth);
-            var minimumPatrolPositionX =
-                simulation.SimulationCenter.x - halfSimulationAreaWidth + boundaryInset;
-            var maximumPatrolPositionX =
-                simulation.SimulationCenter.x + halfSimulationAreaWidth - boundaryInset;
-
-            patrolTargetPositionX = UnityEngine.Random.Range(
-                minimumPatrolPositionX,
-                maximumPatrolPositionX
-            );
-        }
-
         private void OnDisable()
         {
             if (characterMotor != null)
@@ -225,7 +305,18 @@ namespace SphSwe.Gameplay
         {
             attackHorizontalAlignmentTolerance = Mathf.Max(0f, attackHorizontalAlignmentTolerance);
             waveHorizontalAlignmentTolerance = Mathf.Max(0f, waveHorizontalAlignmentTolerance);
-            patrolBoundaryInset = Mathf.Max(0f, patrolBoundaryInset);
+            horizontalBoundaryInset = Mathf.Max(0f, horizontalBoundaryInset);
+            minimumLightningAimDuration = Mathf.Max(0f, minimumLightningAimDuration);
+            maximumLightningAimDuration = Mathf.Max(
+                minimumLightningAimDuration,
+                maximumLightningAimDuration
+            );
+            lightningAttackAccuracy = Mathf.Clamp01(lightningAttackAccuracy);
+            minimumLightningMissOffset = Mathf.Max(0f, minimumLightningMissOffset);
+            maximumLightningMissOffset = Mathf.Max(
+                minimumLightningMissOffset,
+                maximumLightningMissOffset
+            );
             waveDefenseActivationDistanceBeforeCenter = Mathf.Max(
                 0f,
                 waveDefenseActivationDistanceBeforeCenter
@@ -234,6 +325,14 @@ namespace SphSwe.Gameplay
             maximumWaveGenerationInterval = Mathf.Max(
                 minimumWaveGenerationInterval,
                 maximumWaveGenerationInterval
+            );
+            minimumOffensiveWaveGenerationInterval = Mathf.Max(
+                0.01f,
+                minimumOffensiveWaveGenerationInterval
+            );
+            maximumOffensiveWaveGenerationInterval = Mathf.Max(
+                minimumOffensiveWaveGenerationInterval,
+                maximumOffensiveWaveGenerationInterval
             );
         }
 
