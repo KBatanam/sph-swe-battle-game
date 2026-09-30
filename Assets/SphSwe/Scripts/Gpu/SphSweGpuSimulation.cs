@@ -25,6 +25,14 @@ namespace SphSwe.Gpu
         private int gridCellCountX;
         private int gridCellCountZ;
         
+        [Header("Surface Mesh")]
+
+        [SerializeField, Min(2)]
+        private int surfaceVertexCountX = 128;
+
+        [SerializeField, Min(2)]
+        private int surfaceVertexCountZ = 128;
+        
         [Header("Simulation Timing")]
         
         [SerializeField]
@@ -37,6 +45,8 @@ namespace SphSwe.Gpu
         private int maximumSimulationSubstepCount = 20;
 
         public SphSweSimulation SourceSimulation => sourceSimulation;
+        public int SurfaceVertexCountX => surfaceVertexCountX;
+        public int SurfaceVertexCountZ => surfaceVertexCountZ;
         
         /// <summary>
         /// 描画処理で使用するGPU粒子バッファと粒子数を取得する。
@@ -54,6 +64,31 @@ namespace SphSwe.Gpu
 
             particleBuffer = gpuBuffers.ParticleBuffer;
             particleCount = gpuBuffers.ParticleCount;
+            return true;
+        }
+        
+        /// <summary>
+        /// 描画処理で使用するGPU水面頂点バッファと、
+        /// X、Z方向の頂点数を取得する。
+        /// 返されたバッファの所有権はSphSweGpuSimulationが保持するため、
+        /// 呼び出し側でDisposeしてはならない。
+        /// </summary>
+        public bool TryGetSurfaceVertexBuffer(
+            out GraphicsBuffer surfaceVertexBuffer,
+            out int vertexCountX,
+            out int vertexCountZ)
+        {
+            if (gpuBuffers == null || gpuBuffers.SurfaceVertexBuffer == null || !gpuBuffers.SurfaceVertexBuffer.IsValid())
+            {
+                surfaceVertexBuffer = null;
+                vertexCountX = 0;
+                vertexCountZ = 0;
+                return false;
+            }
+
+            surfaceVertexBuffer = gpuBuffers.SurfaceVertexBuffer;
+            vertexCountX = surfaceVertexCountX;
+            vertexCountZ = surfaceVertexCountZ;
             return true;
         }
         
@@ -106,7 +141,13 @@ namespace SphSwe.Gpu
             CalculateGridBounds(particles, sourceSimulation.EffectiveRadius);
 
             var cellCount = checked(gridCellCountX * gridCellCountZ);
-            gpuBuffers = new SphSweGpuBuffers(particles.Length, cellCount);
+            var surfaceVertexCount = checked(surfaceVertexCountX * surfaceVertexCountZ);
+
+            gpuBuffers = new SphSweGpuBuffers(
+                particles.Length,
+                cellCount,
+                surfaceVertexCount
+            );
 
             var gpuParticles = new SphSweGpuParticle[particles.Length];
 

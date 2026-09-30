@@ -50,6 +50,10 @@ namespace SphSwe.Gpu
         private static readonly int SideWaveAffectedWidthPropertyId = Shader.PropertyToID("_SideWaveAffectedWidth");
         private static readonly int SideWaveStrengthPropertyId = Shader.PropertyToID("_SideWaveStrength");
         
+        private static readonly int SurfaceVerticesPropertyId = Shader.PropertyToID("_SurfaceVertices");
+        private static readonly int SurfaceVertexCountXPropertyId = Shader.PropertyToID("_SurfaceVertexCountX");
+        private static readonly int SurfaceVertexCountZPropertyId = Shader.PropertyToID("_SurfaceVertexCountZ");
+        
         private int clearCellParticleCountsKernelIndex;
         private int registerParticlesInCellsKernelIndex;
         private int scanCellParticleCountsByGroupKernelIndex;
@@ -69,6 +73,8 @@ namespace SphSwe.Gpu
         private int applyWaveImpulseKernelIndex;
         private int sampleFluidSurfaceKernelIndex;
         private int applySideWaveImpulseKernelIndex;
+        private int calculateSurfaceVertexDepthsKernelIndex;
+        private int calculateSurfaceVertexNormalsKernelIndex;
 
         private void InitializeKernelIndices()
         {
@@ -91,6 +97,8 @@ namespace SphSwe.Gpu
             applyWaveImpulseKernelIndex = simulationComputeShader.FindKernel("ApplyWaveImpulse");
             sampleFluidSurfaceKernelIndex = simulationComputeShader.FindKernel("SampleFluidSurface");
             applySideWaveImpulseKernelIndex = simulationComputeShader.FindKernel("ApplySideWaveImpulse");
+            calculateSurfaceVertexDepthsKernelIndex = simulationComputeShader.FindKernel("CalculateSurfaceVertexDepths");
+            calculateSurfaceVertexNormalsKernelIndex = simulationComputeShader.FindKernel("CalculateSurfaceVertexNormals");
         }
 
         /// <summary>
@@ -308,6 +316,36 @@ namespace SphSwe.Gpu
                 ParticlesPropertyId,
                 gpuBuffers.ParticleBuffer
             );
+            simulationComputeShader.SetBuffer(
+                calculateSurfaceVertexDepthsKernelIndex,
+                ParticlesPropertyId,
+                gpuBuffers.ParticleBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                calculateSurfaceVertexDepthsKernelIndex,
+                CellParticleCountsPropertyId,
+                gpuBuffers.CellParticleCountBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                calculateSurfaceVertexDepthsKernelIndex,
+                CellParticleStartIndicesPropertyId,
+                gpuBuffers.CellParticleStartIndexBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                calculateSurfaceVertexDepthsKernelIndex,
+                SortedParticleIndicesPropertyId,
+                gpuBuffers.SortedParticleIndexBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                calculateSurfaceVertexDepthsKernelIndex,
+                SurfaceVerticesPropertyId,
+                gpuBuffers.SurfaceVertexBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                calculateSurfaceVertexNormalsKernelIndex,
+                SurfaceVerticesPropertyId,
+                gpuBuffers.SurfaceVertexBuffer
+            );
         }
         
         /// <summary>
@@ -338,6 +376,9 @@ namespace SphSwe.Gpu
             
             simulationComputeShader.SetFloat(CourantNumberPropertyId, sourceSimulation.CourantNumber);
             simulationComputeShader.SetFloat(MaximumSimulationTimeStepPropertyId, sourceSimulation.MaximumSimulationTimeStep);
+            
+            simulationComputeShader.SetInt(SurfaceVertexCountXPropertyId, surfaceVertexCountX);
+            simulationComputeShader.SetInt(SurfaceVertexCountZPropertyId, surfaceVertexCountZ);
         }
         
         private void BindSimulationTimeStateBuffer(int kernelIndex)

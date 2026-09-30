@@ -92,6 +92,51 @@ namespace SphSwe.Gpu
         }
         
         /// <summary>
+        /// X、Y方向に並ぶ要素を処理できるスレッドグループ数を計算し、
+        /// 二次元のCompute Shaderカーネルを実行する。
+        /// </summary>
+        private void DispatchTwoDimensions(
+            int kernelIndex,
+            int elementCountX,
+            int elementCountY)
+        {
+            if (elementCountX <= 0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(elementCountX),
+                    elementCountX,
+                    "X element count must be greater than zero."
+                );
+            }
+
+            if (elementCountY <= 0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(elementCountY),
+                    elementCountY,
+                    "Y element count must be greater than zero."
+                );
+            }
+
+            simulationComputeShader.GetKernelThreadGroupSizes(
+                kernelIndex,
+                out var threadCountX,
+                out var threadCountY,
+                out _
+            );
+
+            var threadGroupCountX = (elementCountX + (int)threadCountX - 1) / (int)threadCountX;
+            var threadGroupCountY = (elementCountY + (int)threadCountY - 1) / (int)threadCountY;
+
+            simulationComputeShader.Dispatch(
+                kernelIndex,
+                threadGroupCountX,
+                threadGroupCountY,
+                1
+            );
+        }
+        
+        /// <summary>
         /// 指定した時間刻みを使用し、半陰的オイラー法で
         /// 流体粒子の速度と位置を1ステップ更新する。
         /// </summary>
@@ -211,6 +256,8 @@ namespace SphSwe.Gpu
                 ExecuteBeginSimulationSubstep();
                 ExecuteSimulationSubstep();
             }
+            
+            ExecuteSurfaceVertexCalculation();
         }
         
         /// <summary>
@@ -347,6 +394,25 @@ namespace SphSwe.Gpu
             );
 
             return true;
+        }
+        
+        /// <summary>
+        /// 固定水面メッシュの各頂点へ流体深さを書き込み、
+        /// 全頂点の水深が確定した後に水面法線を計算する。
+        /// </summary>
+        private void ExecuteSurfaceVertexCalculation()
+        {
+            DispatchTwoDimensions(
+                calculateSurfaceVertexDepthsKernelIndex,
+                surfaceVertexCountX,
+                surfaceVertexCountZ
+            );
+
+            DispatchTwoDimensions(
+                calculateSurfaceVertexNormalsKernelIndex,
+                surfaceVertexCountX,
+                surfaceVertexCountZ
+            );
         }
     }
 }

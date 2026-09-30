@@ -19,12 +19,14 @@ namespace SphSwe.Gpu
         public GraphicsBuffer MinimumTimeStepBitsBuffer { get; }
         public GraphicsBuffer SimulationTimeStateBuffer { get; }
         public GraphicsBuffer SurfaceSampleBuffer { get; }
+        public GraphicsBuffer SurfaceVertexBuffer { get; }
         
         public int ParticleCount { get; }
         public int CellCount { get; }
         public int ScanGroupCount { get; }
+        public int SurfaceVertexCount { get; }
 
-        public SphSweGpuBuffers(int particleCount, int cellCount)
+        public SphSweGpuBuffers(int particleCount, int cellCount, int surfaceVertexCount)
         {
             if (particleCount <= 0)
             {
@@ -44,9 +46,19 @@ namespace SphSwe.Gpu
                 );
             }
             
+            if (surfaceVertexCount <= 0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(surfaceVertexCount),
+                    surfaceVertexCount,
+                    "Surface vertex count must be greater than zero."
+                );
+            }
+            
             ParticleCount = particleCount;
             CellCount = cellCount;
             ScanGroupCount = (cellCount + ScanElementCount - 1) / ScanElementCount;
+            SurfaceVertexCount = surfaceVertexCount;
             
             ParticleBuffer = CreateBuffer(particleCount, SphSweGpuParticle.Stride);
             ParticleCellIndexBuffer = CreateUIntBuffer(particleCount);
@@ -59,6 +71,7 @@ namespace SphSwe.Gpu
             MinimumTimeStepBitsBuffer = CreateUIntBuffer(1);
             SimulationTimeStateBuffer = CreateBuffer(1, SphSweGpuSimulationTimeState.Stride);
             SurfaceSampleBuffer = CreateBuffer(1, SphSweGpuSurfaceSample.Stride);
+            SurfaceVertexBuffer = CreateBuffer(surfaceVertexCount, SphSweGpuSurfaceVertex.Stride);
         }
         
         private static GraphicsBuffer CreateUIntBuffer(int elementCount)
@@ -89,6 +102,7 @@ namespace SphSwe.Gpu
             MinimumTimeStepBitsBuffer.Dispose();
             SimulationTimeStateBuffer.Dispose();
             SurfaceSampleBuffer.Dispose();
+            SurfaceVertexBuffer.Dispose();
 
             disposed = true;
         }

@@ -17,11 +17,14 @@
 #pragma kernel ClearMinimumTimeStep
 #pragma kernel CalculateMinimumTimeStep
 #pragma kernel SampleFluidSurface
+#pragma kernel CalculateSurfaceVertexDepths
+#pragma kernel CalculateSurfaceVertexNormals
 
 #include "SphSweGpuParticle.hlsl"
 #include "SphSweGpuSimulationTimeState.hlsl"
 #include "SphSweKernels.hlsl"
 #include "SphSweGpuSurfaceSample.hlsl"
+#include "SphSweGpuSurfaceVertex.hlsl"
 
 RWStructuredBuffer<SphSweGpuParticle> _Particles;
 RWStructuredBuffer<uint> _ParticleCellIndices;
@@ -42,6 +45,7 @@ RWStructuredBuffer<uint> _SortedParticleIndices;
 RWStructuredBuffer<uint> _MinimumTimeStepBits;
 RWStructuredBuffer<SphSweGpuSimulationTimeState> _SimulationTimeState;
 RWStructuredBuffer<SphSweGpuSurfaceSample> _SurfaceSamples;
+RWStructuredBuffer<SphSweGpuSurfaceVertex> _SurfaceVertices;
 
 float2 _SurfaceSampleSimulationPosition;
 float _FrameDeltaTime;
@@ -76,6 +80,9 @@ float _SideWaveStrength;
 
 float _CourantNumber;
 float _MaximumSimulationTimeStep;
+
+uint _SurfaceVertexCountX;
+uint _SurfaceVertexCountZ;
 
 static const uint InvalidCellIndex = 0xffffffffu;
 static const int BoundaryParticleType = 1;
@@ -293,6 +300,180 @@ void SampleFluidSurface(uint3 dispatchThreadId : SV_DispatchThreadID)
     surfaceSample.IsValid = 1u;
 
     _SurfaceSamples[0] = surfaceSample;
+}
+
+/// <summary>
+/// 固定水面メッシュの各頂点について、
+/// 周辺流体粒子の水深をPoly6カーネルで重み付き平均する。
+/// 境界粒子は水面を構成する流体ではないため、補間対象から除外する。
+/// </summary>
+[numthreads(8, 8, 1)]
+void CalculateSurfaceVertexDepths(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    uint surfaceVertexX = dispatchThreadId.x;
+    uint surfaceVertexZ = dispatchThreadId.y;
+
+    if (surfaceVertexX >= _SurfaceVertexCountX || surfaceVertexZ >= _SurfaceVertexCountZ)
+    {
+        return;
+    }
+
+    uint surfaceVertexIndex = surfaceVertexZ * _SurfaceVertexCountX + surfaceVertexX;
+
+    SphSweGpuSurfaceVertex surfaceVertex;
+    surfaceVertex.FluidDepth = 0.0f;
+    surfaceVertex.Normal = float3(0.0f, 1.0f, 0.0f);
+
+    if (_GridCellSize <= 0.0f || _SurfaceVertexCountX < 2u || _SurfaceVertexCountZ < 2u)
+    {
+        _SurfaceVertices[surfaceVertexIndex] = surfaceVertex;
+        return;
+    }
+
+    float2 normalizedSurfacePosition = float2(
+        (float)surfaceVertexX / (float)(_SurfaceVertexCountX - 1u),
+        (float)surfaceVertexZ / (float)(_SurfaceVertexCountZ - 1u)
+    );
+
+    float2 surfaceSimulationPosition = lerp(
+        _SimulationMinimumPosition,
+        _SimulationMaximumPosition,
+        normalizedSurfacePosition
+    );
+
+    int2 centerCellCoordinate = (int2)floor((surfaceSimulationPosition - _GridMinimumPosition) / _GridCellSize);
+
+    if (centerCellCoordinate.x < 0 ||
+        centerCellCoordinate.y < 0 ||
+        centerCellCoordinate.x >= (int)_GridCellCountX ||
+        centerCellCoordinate.y >= (int)_GridCellCountZ)
+    {
+        _SurfaceVertices[surfaceVertexIndex] = surfaceVertex;
+        return;
+    }
+
+    float weightedFluidDepth = 0.0f;
+    float totalWeight = 0.0f;
+
+    for (int cellOffsetZ = -1; cellOffsetZ <= 1; cellOffsetZ++)
+    {
+        int neighborCellCoordinateZ = centerCellCoordinate.y + cellOffsetZ;
+
+        if (neighborCellCoordinateZ < 0 || neighborCellCoordinateZ >= (int)_GridCellCountZ)
+        {
+            continue;
+        }
+
+        for (int cellOffsetX = -1; cellOffsetX <= 1; cellOffsetX++)
+        {
+            int neighborCellCoordinateX = centerCellCoordinate.x + cellOffsetX;
+
+            if (neighborCellCoordinateX < 0 || neighborCellCoordinateX >= (int)_GridCellCountX)
+            {
+                continue;
+            }
+
+            uint neighborCellIndex = (uint)neighborCellCoordinateZ * _GridCellCountX + (uint)neighborCellCoordinateX;
+
+            uint neighborParticleStartIndex = _CellParticleStartIndices[neighborCellIndex];
+
+            uint neighborParticleCount = _CellParticleCounts[neighborCellIndex];
+
+            for (uint neighborOffset = 0u; neighborOffset < neighborParticleCount; neighborOffset++)
+            {
+                uint sortedParticleIndex = neighborParticleStartIndex + neighborOffset;
+                uint neighborParticleIndex = _SortedParticleIndices[sortedParticleIndex];
+
+                SphSweGpuParticle neighborParticle = _Particles[neighborParticleIndex];
+
+                if (neighborParticle.Type == BoundaryParticleType)
+                {
+                    continue;
+                }
+
+                float2 positionDifference = surfaceSimulationPosition - neighborParticle.Position;
+                float squaredDistance = positionDifference.x * positionDifference.x + positionDifference.y * positionDifference.y;
+
+                float weight = EvaluatePoly6(squaredDistance, _EffectiveRadius);
+
+                if (weight <= 0.0f)
+                {
+                    continue;
+                }
+
+                weightedFluidDepth += neighborParticle.FluidDepth * weight;
+                totalWeight += weight;
+            }
+        }
+    }
+
+    if (totalWeight > 0.0f)
+    {
+        surfaceVertex.FluidDepth = weightedFluidDepth / totalWeight;
+    }
+
+    _SurfaceVertices[surfaceVertexIndex] = surfaceVertex;
+}
+
+/// <summary>
+/// 左右および前後の水面頂点の水深差から、
+/// 固定水面メッシュの頂点法線を計算する。
+/// 水深補間が全頂点について完了した後に実行する必要がある。
+/// </summary>
+[numthreads(8, 8, 1)]
+void CalculateSurfaceVertexNormals(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    uint surfaceVertexX = dispatchThreadId.x;
+    uint surfaceVertexZ = dispatchThreadId.y;
+
+    if (surfaceVertexX >= _SurfaceVertexCountX || surfaceVertexZ >= _SurfaceVertexCountZ)
+    {
+        return;
+    }
+
+    uint surfaceVertexIndex = surfaceVertexZ * _SurfaceVertexCountX + surfaceVertexX;
+
+    if (_SurfaceVertexCountX < 2u || _SurfaceVertexCountZ < 2u)
+    {
+        _SurfaceVertices[surfaceVertexIndex].Normal = float3(0.0f, 1.0f, 0.0f);
+        return;
+    }
+
+    uint leftVertexX = surfaceVertexX > 0u ? surfaceVertexX - 1u : surfaceVertexX;
+    uint rightVertexX = min(surfaceVertexX + 1u, _SurfaceVertexCountX - 1u);
+
+    uint backVertexZ = surfaceVertexZ > 0u ? surfaceVertexZ - 1u : surfaceVertexZ;
+    uint forwardVertexZ = min(surfaceVertexZ + 1u, _SurfaceVertexCountZ - 1u);
+
+    uint leftVertexIndex = surfaceVertexZ * _SurfaceVertexCountX + leftVertexX;
+    uint rightVertexIndex = surfaceVertexZ * _SurfaceVertexCountX + rightVertexX;
+    uint backVertexIndex = backVertexZ * _SurfaceVertexCountX + surfaceVertexX;
+    uint forwardVertexIndex = forwardVertexZ * _SurfaceVertexCountX + surfaceVertexX;
+
+    float leftFluidDepth = _SurfaceVertices[leftVertexIndex].FluidDepth;
+    float rightFluidDepth = _SurfaceVertices[rightVertexIndex].FluidDepth;
+    float backFluidDepth = _SurfaceVertices[backVertexIndex].FluidDepth;
+    float forwardFluidDepth = _SurfaceVertices[forwardVertexIndex].FluidDepth;
+
+    float surfaceVertexSpacingX = (_SimulationMaximumPosition.x - _SimulationMinimumPosition.x) / (float)(_SurfaceVertexCountX - 1u);
+    float surfaceVertexSpacingZ = (_SimulationMaximumPosition.y - _SimulationMinimumPosition.y) / (float)(_SurfaceVertexCountZ - 1u);
+
+    float horizontalDistanceX = (float)(rightVertexX - leftVertexX) * surfaceVertexSpacingX;
+    float horizontalDistanceZ = (float)(forwardVertexZ - backVertexZ) * surfaceVertexSpacingZ;
+
+    float3 surfaceTangentX = float3(
+        horizontalDistanceX,
+        rightFluidDepth - leftFluidDepth,
+        0.0f
+    );
+
+    float3 surfaceTangentZ = float3(
+        0.0f,
+        forwardFluidDepth - backFluidDepth,
+        horizontalDistanceZ
+    );
+
+    _SurfaceVertices[surfaceVertexIndex].Normal = normalize(cross(surfaceTangentZ, surfaceTangentX));
 }
 
 /// <summary>
