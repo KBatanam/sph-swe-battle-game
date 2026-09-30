@@ -1,6 +1,7 @@
 #pragma kernel BeginSimulationFrame
 #pragma kernel BeginSimulationSubstep
 #pragma kernel ApplyWaveImpulse
+#pragma kernel ApplySideWaveImpulse
 #pragma kernel FinalizeSimulationTimeStep
 #pragma kernel CompleteSimulationSubstep
 #pragma kernel ClearCellParticleCounts
@@ -68,6 +69,10 @@ float2 _WaveImpulseCenterSimulationPosition;
 float2 _WaveImpulseSimulationDirection;
 float _WaveImpulseRadius;
 float _WaveImpulseStrength;
+
+float2 _SideWaveSimulationDirection;
+float _SideWaveAffectedWidth;
+float _SideWaveStrength;
 
 float _CourantNumber;
 float _MaximumSimulationTimeStep;
@@ -139,6 +144,52 @@ void ApplyWaveImpulse(uint3 dispatchThreadId : SV_DispatchThreadID)
         _WaveImpulseSimulationDirection
         * _WaveImpulseStrength
         * impulseWeight;
+
+    _Particles[particleIndex] = particle;
+}
+
+/// <summary>
+/// 左右どちらかの端から一定幅に存在する全流体粒子へ、
+/// シミュレーション領域の内側へ向かう速度Impulseを加える。
+/// Z方向には制限しないため、端に沿った流体粒子すべてが対象となる。
+/// </summary>
+[numthreads(64, 1, 1)]
+void ApplySideWaveImpulse(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    uint particleIndex = dispatchThreadId.x;
+
+    if (particleIndex >= _ParticleCount)
+    {
+        return;
+    }
+
+    SphSweGpuParticle particle = _Particles[particleIndex];
+
+    if (particle.Type == BoundaryParticleType)
+    {
+        return;
+    }
+
+    if (_SideWaveAffectedWidth <= 0.0f || _SideWaveStrength <= 0.0f)
+    {
+        return;
+    }
+
+    float2 waveDirection = normalize(_SideWaveSimulationDirection);
+    bool isGeneratedFromLeftSide = waveDirection.x > 0.0f;
+
+    float distanceFromSide = isGeneratedFromLeftSide
+        ? particle.Position.x - _SimulationMinimumPosition.x
+        : _SimulationMaximumPosition.x - particle.Position.x;
+
+    if (distanceFromSide < 0.0f || distanceFromSide >= _SideWaveAffectedWidth)
+    {
+        return;
+    }
+
+    float normalizedDistanceFromSide = distanceFromSide / _SideWaveAffectedWidth;
+    float impulseWeight = 1.0f - normalizedDistanceFromSide;
+    particle.Velocity += waveDirection * _SideWaveStrength * impulseWeight;
 
     _Particles[particleIndex] = particle;
 }

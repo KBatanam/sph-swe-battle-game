@@ -283,5 +283,70 @@ namespace SphSwe.Gpu
 
             return true;
         }
+        
+        /// <summary>
+        /// シミュレーション領域の左右どちらかの端にある流体粒子へ、
+        /// 領域の内側へ向かう速度Impulseを一度だけ加える。
+        /// </summary>
+        public bool TryApplySideWaveImpulse(Vector2 simulationDirection, float affectedWidth, float strength)
+        {
+            if (gpuBuffers == null || gpuBuffers.ParticleBuffer == null || !gpuBuffers.ParticleBuffer.IsValid())
+            {
+                return false;
+            }
+
+            if (Mathf.Abs(simulationDirection.x) <= 0f)
+            {
+                throw new ArgumentException(
+                    "Side wave direction must have a non-zero X component.",
+                    nameof(simulationDirection)
+                );
+            }
+
+            if (affectedWidth <= 0f)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(affectedWidth),
+                    affectedWidth,
+                    "Side wave affected width must be greater than zero."
+                );
+            }
+
+            if (strength <= 0f)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(strength),
+                    strength,
+                    "Side wave strength must be greater than zero."
+                );
+            }
+
+            var normalizedSimulationDirection =
+                simulationDirection.x > 0f
+                    ? Vector2.right
+                    : Vector2.left;
+
+            simulationComputeShader.SetVector(
+                SideWaveSimulationDirectionPropertyId,
+                normalizedSimulationDirection
+            );
+
+            simulationComputeShader.SetFloat(
+                SideWaveAffectedWidthPropertyId,
+                affectedWidth
+            );
+
+            simulationComputeShader.SetFloat(
+                SideWaveStrengthPropertyId,
+                strength
+            );
+
+            DispatchOneDimension(
+                applySideWaveImpulseKernelIndex,
+                gpuBuffers.ParticleCount
+            );
+
+            return true;
+        }
     }
 }

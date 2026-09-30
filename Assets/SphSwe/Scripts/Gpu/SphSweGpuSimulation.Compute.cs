@@ -46,6 +46,10 @@ namespace SphSwe.Gpu
         private static readonly int SurfaceSamplesPropertyId = Shader.PropertyToID("_SurfaceSamples");
         private static readonly int SurfaceSampleSimulationPositionPropertyId = Shader.PropertyToID("_SurfaceSampleSimulationPosition");
         
+        private static readonly int SideWaveSimulationDirectionPropertyId = Shader.PropertyToID("_SideWaveSimulationDirection");
+        private static readonly int SideWaveAffectedWidthPropertyId = Shader.PropertyToID("_SideWaveAffectedWidth");
+        private static readonly int SideWaveStrengthPropertyId = Shader.PropertyToID("_SideWaveStrength");
+        
         private int clearCellParticleCountsKernelIndex;
         private int registerParticlesInCellsKernelIndex;
         private int scanCellParticleCountsByGroupKernelIndex;
@@ -64,6 +68,7 @@ namespace SphSwe.Gpu
         private int completeSimulationSubstepKernelIndex;
         private int applyWaveImpulseKernelIndex;
         private int sampleFluidSurfaceKernelIndex;
+        private int applySideWaveImpulseKernelIndex;
 
         private void InitializeKernelIndices()
         {
@@ -85,6 +90,7 @@ namespace SphSwe.Gpu
             completeSimulationSubstepKernelIndex = simulationComputeShader.FindKernel("CompleteSimulationSubstep");
             applyWaveImpulseKernelIndex = simulationComputeShader.FindKernel("ApplyWaveImpulse");
             sampleFluidSurfaceKernelIndex = simulationComputeShader.FindKernel("SampleFluidSurface");
+            applySideWaveImpulseKernelIndex = simulationComputeShader.FindKernel("ApplySideWaveImpulse");
         }
 
         /// <summary>
@@ -296,6 +302,11 @@ namespace SphSwe.Gpu
                 sampleFluidSurfaceKernelIndex,
                 SurfaceSamplesPropertyId,
                 gpuBuffers.SurfaceSampleBuffer
+            );
+            simulationComputeShader.SetBuffer(
+                applySideWaveImpulseKernelIndex,
+                ParticlesPropertyId,
+                gpuBuffers.ParticleBuffer
             );
         }
         
