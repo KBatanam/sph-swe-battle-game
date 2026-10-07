@@ -26,6 +26,22 @@ namespace SphSwe.Gameplay
         public bool IsReady => remainingCooldownDuration <= 0f;
 
         public float RemainingCooldownDuration => remainingCooldownDuration;
+
+        /// <summary>
+        /// 雷砲の発射に成功したときに通知する。
+        /// ネットワーク対戦では、このイベントをサーバーへ転送して
+        /// 権威側で命中判定と硬直を確定するために使用する。
+        /// </summary>
+        public event Action LightningFired;
+
+        /// <summary>
+        /// クールダウン残り時間を権威側の値で上書きする。
+        /// クライアント側ではサーバーが同期した値を受け取って適用する。
+        /// </summary>
+        public void SetAuthoritativeRemainingCooldownDuration(float remainingCooldown)
+        {
+            remainingCooldownDuration = Mathf.Max(0f, remainingCooldown);
+        }
         
         private const int MaximumHitColliderCount = 16;
 
@@ -60,6 +76,8 @@ namespace SphSwe.Gameplay
             ApplyStunToHitCharacters();
 
             remainingCooldownDuration = cooldownDuration;
+
+            LightningFired?.Invoke();
 
             return true;
         }

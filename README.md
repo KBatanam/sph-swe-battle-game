@@ -23,6 +23,7 @@ SPH-SWE（Smoothed Particle Hydrodynamicsによる浅水方程式）で計算し
 - Input System 1.20.0
 - TextMesh Pro
 - ZString
+- Mirror（`Assets/Mirror`、ネットワーク対戦用）
 - UniCortex
 
 ## 開発支援
@@ -42,6 +43,7 @@ Codexは開発支援に使用しているものであり、このゲームをclo
 | TextMesh Pro | 得点、クールタイム、FPSなどのUI | Unity Package |
 | Unity Test Framework | Editor上の自動テスト | Unity Package Manager |
 | ZString | Runtime文字列生成時のAllocation削減 | `Assets/ZString` |
+| Mirror | ネットワーク対戦の基盤 | `Assets/Mirror`（GitHub Releasesの固定バージョン） |
 | UniCortex | Unity Editorの外部操作と検証補助 | Git URL Package |
 | OpenGameArt Lightning | 雷砲および硬直表現用テクスチャ | `Assets/ThirdParty` |
 
@@ -166,7 +168,7 @@ Assets/SphSwe/
 ## 現在の状態と既知の課題
 
 - ゲームループ、得点、Enemy AI、雷砲、硬直表現、水面メッシュ描画まで動作する試作段階です。
-- ネットワーク対戦は未実装です。
+- ネットワーク対戦は実装中です。Mirrorを導入し、ホスト／ゲストのセッション、キャラクター同期の基盤（M1）を実装済みです。詳細は[`Documentation/20-Network-Multiplayer.md`](Documentation/20-Network-Multiplayer.md)を参照してください。
 - 水面補間対象となる粒子が見つからない頂点では、水深が0となり局所的なくぼみが見える場合があります。
 - Enemyの造波頻度、雷砲命中率、硬直時間などは継続調整中です。
 - `Viscosity Coefficient`は数値安定性にも関係するため、見た目の減衰調整だけを目的に大きく変更しないでください。
@@ -185,6 +187,8 @@ Assets/SphSwe/
 - 水面Shaderの透明感、反射、影および深度表現の改善
 - サーバーへ接続するオンライン対戦機能の実装
 - オンライン対戦を考慮した入力、シミュレーションおよびゲーム状態の同期設計
+- ネットワーク対戦の試合フロー（カウントダウン、勝敗、再戦、切断処理）
+- セルフホストリレーによるインターネット対戦への対応
 
 ## Third-party assets
 

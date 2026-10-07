@@ -25,6 +25,14 @@ namespace SphSwe.Gameplay
         private float waveImpulseStrength = 1f;
 
         /// <summary>
+        /// 波の発生に成功したときに、GPUシミュレーション座標系の
+        /// 中心、方向、半径、強度を通知する。
+        /// ネットワーク対戦では、このイベントをサーバーへ転送して
+        /// 権威側の流体へ同じインパルスを適用するために使用する。
+        /// </summary>
+        public event Action<Vector2, Vector2, float, float> WaveGenerated;
+
+        /// <summary>
         /// このGameObjectの位置を中心として、
         /// transform.forward方向へ進む波を一度だけ発生させる。
         /// </summary>
@@ -71,6 +79,16 @@ namespace SphSwe.Gameplay
                 );
             }
 #endif
+
+            if (waveGenerationRequested)
+            {
+                WaveGenerated?.Invoke(
+                    waveImpulseCenterSimulationPosition,
+                    simulationDirection,
+                    waveImpulseRadius,
+                    waveImpulseStrength
+                );
+            }
 
             return waveGenerationRequested;
         }

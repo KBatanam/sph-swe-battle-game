@@ -40,6 +40,26 @@ namespace SphSwe.Gameplay
 #endif
         }
 
+        /// <summary>
+        /// 硬直残り時間を権威側の値で上書きする。
+        /// クライアント側ではサーバーが同期した値を受け取って適用する。
+        /// </summary>
+        public void SetAuthoritativeRemainingStunDuration(float remainingStun)
+        {
+            var wasStunned = IsStunned;
+            remainingStunDuration = Mathf.Max(0f, remainingStun);
+            var isStunned = IsStunned;
+
+            if (!wasStunned && isStunned)
+            {
+                StunStateChanged?.Invoke(true);
+            }
+            else if (wasStunned && !isStunned)
+            {
+                StunStateChanged?.Invoke(false);
+            }
+        }
+
         private void Update()
         {
             if (!IsStunned)

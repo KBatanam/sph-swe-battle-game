@@ -30,6 +30,12 @@ namespace SphSwe.Gameplay
         [SerializeField, Required]
         private InputActionReference useSpecialAttackAction;
 
+        /// <summary>
+        /// 左右移動入力に掛ける符号。
+        /// ネットワーク対戦でフィールドを反転して操作する側では -1 に設定する。
+        /// </summary>
+        public float MovementInputSign { get; set; } = 1f;
+
         private void Awake()
         {
             ValidateReferences();
@@ -49,7 +55,7 @@ namespace SphSwe.Gameplay
             var movementInput = movementAction.action.ReadValue<Vector2>();
 
             characterMotor.SetHorizontalDirection(
-                movementInput.x
+                movementInput.x * MovementInputSign
             );
         }
 
