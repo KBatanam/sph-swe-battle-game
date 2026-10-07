@@ -91,3 +91,39 @@ Render Graphは有効のまま使用する。
 - 粒子深度、水厚、平滑化、法線復元、最終合成などの描画パスを構成する段階で利用を検討する。
 - `Compatibility Mode (Render Graph Disabled)`は、古い描画機能との互換性が必要にならない限り有効にしない。
 
+## `SphSwe`接頭辞の使用範囲
+
+`SphSwe`は、SPH-SWE方式へ直接依存する型とAssetだけに付ける。
+
+付ける対象：
+
+- 粒子、カーネル、空間グリッドなどのCPUシミュレーション実装
+- GPU粒子構造体、GPUバッファ、Compute ShaderなどのGPUシミュレーション実装
+- SPH-SWE専用の粒子Renderer、テスト、診断、Profiler Marker
+
+付けない対象：
+
+- Player、Enemy、目的球などのゲームプレイ要素
+- 移動、硬直、必殺技、波生成入力などのゲームルール
+- キャラクター、雷、画面エフェクトなどの汎用的な描画要素
+- UI表示
+
+ゲームプレイ側がSPH-SWE実装を参照する場合でも、その型自身の責務がゲームルールであれば`SphSwe`は付けない。これにより、将来シミュレーション方式や内部実装を変更してもゲームプレイ側の名称を維持できる。
+
+## 名前空間とAssetフォルダ
+
+プロジェクト固有のC#コードは`SphSwe`をルート名前空間とし、機能別フォルダをサブ名前空間へ対応させる。
+
+```text
+Assets/SphSwe/Scripts/Core          → SphSwe.Core
+Assets/SphSwe/Scripts/Gameplay      → SphSwe.Gameplay
+Assets/SphSwe/Scripts/Gpu           → SphSwe.Gpu
+Assets/SphSwe/Scripts/Rendering     → SphSwe.Rendering
+Assets/SphSwe/Scripts/Simulation    → SphSwe.Simulation
+Assets/SphSwe/Scripts/UserInterface → SphSwe.UserInterface
+Assets/SphSwe/Scripts/Validation    → SphSwe.Validation
+Assets/SphSwe/Editor                → SphSwe.Editor
+```
+
+`Plugins`、`ThirdParty`、`TextMesh Pro`、`ZString`などの外部コードには、このルールを適用しない。
+
