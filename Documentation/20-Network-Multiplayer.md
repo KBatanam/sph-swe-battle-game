@@ -14,7 +14,7 @@
 ## 採用した技術
 
 - **ネットワークライブラリ: Mirror（MITライセンス）**
-  - 公式の主チャネルである **Unity Asset Store** から導入する（無料、導入バージョン 96.0.1）。
+  - 公式の主な配布元である **Unity Asset Store** から導入する（無料、導入バージョン 96.0.1）。
   - Mirrorは公式UPMパッケージを提供していないため、`manifest.json` での導入はできない。
   - Asset Storeからインポートした `Assets/Mirror` は**リポジトリにコミットして固定する**。
   - インポートに伴い依存（`com.unity.nuget.newtonsoft-json` 等）とDefine Symbolsもコミットする。
@@ -33,8 +33,8 @@
     浮動小数点の加算順に依存して結果が一致しない。
   - 参照: `Assets/SphSwe/Shaders/Compute/SphSweSimulation.compute`
     の `InterlockedAdd` と密度・加速度の加算ループ。
-- 決定論的になり得るのはCPU基準実装のみだが、固定ステップ駆動や
-  造波・水面サンプルのAPIを持たない。
+- 決定論的になり得るのはCPU基準実装だけだが、その実装には固定ステップ駆動や
+  造波・水面サンプルのAPIが無い。
 - このため**決定論的ロックステップは採用せず、ホスト権威の状態同期**とする。
 
 ## 権威配分
