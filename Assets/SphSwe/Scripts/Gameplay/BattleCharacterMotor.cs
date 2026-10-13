@@ -42,7 +42,21 @@ namespace SphSwe.Gameplay
 
         private void Awake()
         {
+            ResolveReferences();
             ValidateReferences();
+        }
+
+        /// <summary>
+        /// シーン上のシミュレーションへの参照を解決する。
+        /// プレハブを実行時に生成する場合、シーン参照はシリアライズされないため、
+        /// ここで取得する。
+        /// </summary>
+        private void ResolveReferences()
+        {
+            if (simulation == null)
+            {
+                simulation = FindFirstObjectByType<SphSweSimulation>();
+            }
         }
 
         private void Update()

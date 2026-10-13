@@ -77,7 +77,21 @@ namespace SphSwe.Gameplay
         
         private void Awake()
         {
+            ResolveReferences();
             ValidateReferences();
+        }
+
+        /// <summary>
+        /// シーン上のGPUシミュレーションへの参照を解決する。
+        /// プレハブを実行時に生成する場合、シーン参照はシリアライズされないため、
+        /// ここで取得する。
+        /// </summary>
+        private void ResolveReferences()
+        {
+            if (gpuSimulation == null)
+            {
+                gpuSimulation = FindFirstObjectByType<SphSweGpuSimulation>();
+            }
         }
         
         private void ValidateReferences()
