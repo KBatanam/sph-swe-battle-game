@@ -110,3 +110,7 @@ InitTestScene*.unity*
 
 # Local Codex configuration
 /.codex/
+
+# Mirror networking (imported from the Unity Asset Store, not committed)
+/[Aa]ssets/Mirror/
+/[Aa]ssets/Mirror.meta
