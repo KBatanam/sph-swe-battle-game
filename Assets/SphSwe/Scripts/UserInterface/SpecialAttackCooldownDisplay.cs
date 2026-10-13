@@ -14,7 +14,7 @@ namespace SphSwe.UserInterface
         [Header("References")]
 
         [SerializeField, Required]
-        private LightningCannon lightningCannon;
+        private SpecialAttackController specialAttackController;
 
         [Header("Display")]
 
@@ -45,7 +45,7 @@ namespace SphSwe.UserInterface
 
         private void Update()
         {
-            if (lightningCannon.IsReady)
+            if (specialAttackController.IsReady)
             {
                 UpdateReadyDisplay();
                 return;
@@ -73,7 +73,7 @@ namespace SphSwe.UserInterface
 
         private void UpdateCooldownDisplay()
         {
-            var remainingCooldownTenths = Mathf.CeilToInt(lightningCannon.RemainingCooldownDuration * 10f);
+            var remainingCooldownTenths = Mathf.CeilToInt(specialAttackController.RemainingCooldownDuration * 10f);
 
             if (!wasReady
                 && remainingCooldownTenths == previousDisplayedTenths)
@@ -96,11 +96,9 @@ namespace SphSwe.UserInterface
 
         private void ValidateReferences()
         {
-            if (lightningCannon == null)
+            if (specialAttackController == null)
             {
-                throw new InvalidOperationException(
-                    "Lightning Cannon is not assigned."
-                );
+                throw new InvalidOperationException("Special Attack Controller is not assigned.");
             }
         }
     }

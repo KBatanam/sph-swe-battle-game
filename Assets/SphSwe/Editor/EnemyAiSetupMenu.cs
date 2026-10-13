@@ -21,7 +21,8 @@ namespace SphSwe.Editor
             var objectiveBall = FindRequiredObjectByType<ObjectiveBall>();
             var characterMotor = GetRequiredComponent<BattleCharacterMotor>(enemyGameObject);
             var waveGenerator = GetRequiredComponent<WaveGenerator>(enemyGameObject);
-            var lightningCannon = GetRequiredComponent<LightningCannon>(enemyGameObject);
+            var specialAttackController =
+                GetRequiredComponent<SpecialAttackController>(enemyGameObject);
             var enemyController = enemyGameObject.GetComponent<EnemyController>();
 
             if (enemyController == null)
@@ -33,7 +34,11 @@ namespace SphSwe.Editor
             SetObjectReference(serializedController, "simulation", simulation);
             SetObjectReference(serializedController, "characterMotor", characterMotor);
             SetObjectReference(serializedController, "waveGenerator", waveGenerator);
-            SetObjectReference(serializedController, "lightningCannon", lightningCannon);
+            SetObjectReference(
+                serializedController,
+                "specialAttackController",
+                specialAttackController
+            );
             SetObjectReference(serializedController, "playerTransform", playerGameObject.transform);
             SetObjectReference(serializedController, "objectiveBall", objectiveBall);
             serializedController.ApplyModifiedProperties();

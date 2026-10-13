@@ -18,6 +18,7 @@ GameObject:
   - component: {fileID: 4408640398835736011}
   - component: {fileID: 4187786111037975150}
   - component: {fileID: 9170878635685474209}
+  - component: {fileID: 3968657237428595622}
   m_Layer: 0
   m_Name: EnemyCube
   m_TagString: Untagged
@@ -176,9 +177,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 17693ade0faf3754c890f01e77ade383, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Gameplay.LightningCannon
-  lightningBeamEffect: {fileID: 0}
+  displayName: LIGHTNING CANNON
+  lightningBeamEffect: {fileID: 2592039247840257311}
   stunStatus: {fileID: 945905156066370686}
-  cooldownDuration: 5
   hitBoxWidth: 0.4
   hitBoxHeight: 0.6
   stunDuration: 1
@@ -200,15 +201,22 @@ MonoBehaviour:
   simulation: {fileID: 0}
   characterMotor: {fileID: 8085068804389274552}
   waveGenerator: {fileID: 7267665182388856566}
-  lightningCannon: {fileID: 4408640398835736011}
+  specialAttackController: {fileID: 3968657237428595622}
   playerTransform: {fileID: 0}
   objectiveBall: {fileID: 0}
   attackHorizontalAlignmentTolerance: 0.2
   waveHorizontalAlignmentTolerance: 0.45
-  patrolBoundaryInset: 0.25
+  horizontalBoundaryInset: 0.25
+  minimumLightningAimDuration: 0.8
+  maximumLightningAimDuration: 1.1
+  lightningAttackAccuracy: 0.6
+  minimumLightningMissOffset: 0.9
+  maximumLightningMissOffset: 1.4
   waveDefenseActivationDistanceBeforeCenter: 0.75
   minimumWaveGenerationInterval: 0.08
   maximumWaveGenerationInterval: 0.14
+  minimumOffensiveWaveGenerationInterval: 0.3
+  maximumOffensiveWaveGenerationInterval: 0.5
 --- !u!114 &9170878635685474209
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -224,6 +232,22 @@ MonoBehaviour:
   stunStatus: {fileID: 945905156066370686}
   characterRenderer: {fileID: 3095721405586191977}
   characterStunParticleSystem: {fileID: 8449106853576328094}
+--- !u!114 &3968657237428595622
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1731913583891922232}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e33c82bf2961a99498235286be381d91, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SphSwe.Gameplay.SpecialAttackController
+  specialAttackSlots:
+  - {fileID: 4408640398835736011}
+  initialSelectedSlotIndex: 0
+  cooldownDuration: 5
 --- !u!1001 &3080503001689338408
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -281,6 +305,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: bcc7158ad89fd1b45a6d7cd88d91094d, type: 3}
+--- !u!114 &2592039247840257311 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 664528192787453751, guid: bcc7158ad89fd1b45a6d7cd88d91094d, type: 3}
+  m_PrefabInstance: {fileID: 3080503001689338408}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4d3b66742078c9f42bd04994db0fa4df, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Rendering.LightningBeamEffect
 --- !u!4 &8946184683579254153 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 6262007594164918177, guid: bcc7158ad89fd1b45a6d7cd88d91094d, type: 3}

@@ -100,3 +100,29 @@ Enemy Wave Impulse Strength: 2
 雷砲の実際の命中範囲には、雷砲Hit Boxの半幅だけでなくPlayer Colliderの半幅も加わる。小さな照準誤差では命中率がほとんど下がらないため、外す場合のOffsetは合成された当たり幅より大きくする。
 
 これらは簡易AIの難易度調整値であり、ゲームプレイ結果に応じてInspectorから変更する。硬直中の行動拒否は引き続き各行動コンポーネントが担当する。
+
+## 必殺技スロット実装（2026年10月14日）
+
+複数の必殺技を循環選択できるスロット機能を実装した。初期構成は雷砲1枠と空スロット2枠とする。
+
+```text
+Slot 0: LIGHTNING CANNON
+Slot 1: EMPTY
+Slot 2: EMPTY
+```
+
+Playerはマウスホイールまたは`W` / `S`でスロットを切り替え、`Space`で選択中の必殺技を使用する。スロットの端を越えた場合は反対側へ循環する。空スロットを選択している場合は何も発動せず、クールタイムも消費しない。
+
+画面右下には選択中の必殺技名を表示し、その上下に前後のスロット名を小さく薄い文字で表示する。クールタイム表示と選択表示は`PlayerSpecialAttackDisplay.prefab`としてまとめる。
+
+### 責務分担
+
+- `SpecialAttack`は、選択可能な必殺技に共通する表示名と使用APIを定義する。
+- `LightningCannon`は`SpecialAttack`を継承し、雷砲固有の発射、当たり判定および硬直付与を担当する。
+- `SpecialAttackController`は、スロット、現在の選択位置および全必殺技共通のクールタイムを管理する。
+- `PlayerController`は入力を`SpecialAttackController`へ渡し、具体的な必殺技へ直接依存しない。
+- `EnemyController`も`SpecialAttackController`経由で雷砲を使用する。現在のEnemyは雷砲だけを持つ1スロット構成とする。
+- `SpecialAttackSelectionDisplay`は、選択中および前後のスロット名を表示する。
+- `SpecialAttackCooldownDisplay`は、個別の雷砲ではなく`SpecialAttackController`の共通クールタイムを表示する。
+
+必殺技Aの使用後に別の必殺技Bへ切り替えても、クールタイムはリセットされず同じ残り時間を共有する。実際に必殺技の使用が成功した場合だけクールタイムを開始するため、空スロットの選択時や硬直によって発動を拒否された場合はクールタイムを消費しない。

@@ -17,7 +17,7 @@ namespace SphSwe.Gameplay
         private WaveGenerator waveGenerator;
 
         [SerializeField, Required]
-        private LightningCannon lightningCannon;
+        private SpecialAttackController specialAttackController;
 
         [Header("Input Actions")]
 
@@ -29,6 +29,9 @@ namespace SphSwe.Gameplay
 
         [SerializeField, Required]
         private InputActionReference useSpecialAttackAction;
+        
+        [SerializeField, Required]
+        private InputActionReference selectSpecialAttackAction;
 
         private void Awake()
         {
@@ -42,6 +45,8 @@ namespace SphSwe.Gameplay
             generateWaveAction.action.Enable();
             useSpecialAttackAction.action.performed += OnUseSpecialAttackActionPerformed;
             useSpecialAttackAction.action.Enable();
+            selectSpecialAttackAction.action.performed += OnSelectSpecialAttackActionPerformed;
+            selectSpecialAttackAction.action.Enable();
         }
 
         private void Update()
@@ -58,9 +63,11 @@ namespace SphSwe.Gameplay
             characterMotor.SetHorizontalDirection(0f);
             generateWaveAction.action.performed -= OnGenerateWaveActionPerformed;
             useSpecialAttackAction.action.performed -= OnUseSpecialAttackActionPerformed;
+            selectSpecialAttackAction.action.performed -= OnSelectSpecialAttackActionPerformed;
             movementAction.action.Disable();
             generateWaveAction.action.Disable();
             useSpecialAttackAction.action.Disable();
+            selectSpecialAttackAction.action.Disable();
         }
 
         private void OnGenerateWaveActionPerformed(InputAction.CallbackContext context)
@@ -80,17 +87,28 @@ namespace SphSwe.Gameplay
 
         private void OnUseSpecialAttackActionPerformed(InputAction.CallbackContext context)
         {
-            var lightningCannonFired = lightningCannon.TryFireLightningCannon();
+            var specialAttackUsed = specialAttackController.TryUseSelectedSpecialAttack();
 
 #if UNITY_EDITOR
-            if (lightningCannonFired)
+            if (specialAttackUsed)
             {
-                Debug.Log(
-                    "Lightning cannon fired.",
-                    this
-                );
+                Debug.Log("Selected special attack used.", this);
             }
 #endif
+        }
+        
+        private void OnSelectSpecialAttackActionPerformed(InputAction.CallbackContext context)
+        {
+            var selectionDirection = context.ReadValue<float>();
+
+            if (selectionDirection > 0f)
+            {
+                specialAttackController.SelectPreviousSlot();
+            }
+            else if (selectionDirection < 0f)
+            {
+                specialAttackController.SelectNextSlot();
+            }
         }
 
         private void ValidateReferences()
@@ -105,9 +123,9 @@ namespace SphSwe.Gameplay
                 throw new InvalidOperationException("Wave Generator is not assigned.");
             }
 
-            if (lightningCannon == null)
+            if (specialAttackController == null)
             {
-                throw new InvalidOperationException("Lightning Cannon is not assigned.");
+                throw new InvalidOperationException("Special Attack Controller is not assigned.");
             }
 
             if (movementAction == null)
@@ -123,6 +141,11 @@ namespace SphSwe.Gameplay
             if (useSpecialAttackAction == null)
             {
                 throw new InvalidOperationException("Use Special Attack Action is not assigned.");
+            }
+            
+            if (selectSpecialAttackAction == null)
+            {
+                throw new InvalidOperationException("Select Special Attack Action is not assigned.");
             }
         }
     }

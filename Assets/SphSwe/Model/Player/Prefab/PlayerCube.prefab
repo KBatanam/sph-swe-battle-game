@@ -19,6 +19,7 @@ GameObject:
   - component: {fileID: 1663938760846975695}
   - component: {fileID: 1312274867718324268}
   - component: {fileID: 3946965886331843394}
+  - component: {fileID: 7142879331931965766}
   m_Layer: 0
   m_Name: PlayerCube
   m_TagString: Untagged
@@ -151,10 +152,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Gameplay.PlayerController
   characterMotor: {fileID: 5930794283149725415}
   waveGenerator: {fileID: 642935569913117800}
-  lightningCannon: {fileID: 5588397617231413737}
+  specialAttackController: {fileID: 7142879331931965766}
   movementAction: {fileID: -1680190386980627800, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   generateWaveAction: {fileID: 1120369429361536294, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   useSpecialAttackAction: {fileID: -2099379676528639254, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+  selectSpecialAttackAction: {fileID: -7335447357406797688, guid: 052faaac586de48259a63d0c4782560b, type: 3}
 --- !u!114 &5930794283149725415
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -183,6 +185,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 17693ade0faf3754c890f01e77ade383, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Gameplay.LightningCannon
+  displayName: SPECIAL ATTACK
   lightningBeamEffect: {fileID: 8587625325900414852}
   stunStatus: {fileID: 1663938760846975695}
   cooldownDuration: 5
@@ -233,6 +236,24 @@ MonoBehaviour:
   stunStatus: {fileID: 1663938760846975695}
   characterRenderer: {fileID: 5109695933059973896}
   characterStunParticleSystem: {fileID: 907433772497329655}
+--- !u!114 &7142879331931965766
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4125875441369395985}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e33c82bf2961a99498235286be381d91, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SphSwe.Gameplay.SpecialAttackController
+  specialAttackSlots:
+  - {fileID: 5588397617231413737}
+  - {fileID: 0}
+  - {fileID: 0}
+  initialSelectedSlotIndex: 0
+  cooldownDuration: 5
 --- !u!1001 &4582413768519700434
 PrefabInstance:
   m_ObjectHideFlags: 0

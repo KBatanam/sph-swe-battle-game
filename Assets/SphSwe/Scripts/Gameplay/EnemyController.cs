@@ -21,7 +21,7 @@ namespace SphSwe.Gameplay
         private WaveGenerator waveGenerator;
 
         [SerializeField, Required]
-        private LightningCannon lightningCannon;
+        private SpecialAttackController specialAttackController;
 
         [SerializeField, Required]
         private Transform playerTransform;
@@ -103,13 +103,14 @@ namespace SphSwe.Gameplay
                 objectiveBallSimulationPosition.x
             );
 
-            if (lightningCannon.IsReady)
+            if (specialAttackController.IsReady)
             {
                 UpdateLightningAttack(
                     Time.deltaTime,
                     enemySimulationPosition.x,
                     playerSimulationPosition.x
                 );
+
                 return;
             }
 
@@ -202,7 +203,7 @@ namespace SphSwe.Gameplay
                 return;
             }
 
-            if (lightningCannon.TryFireLightningCannon())
+            if (specialAttackController.TryUseSelectedSpecialAttack())
             {
                 isPreparingLightningAttack = false;
             }
@@ -353,9 +354,9 @@ namespace SphSwe.Gameplay
                 throw new InvalidOperationException("Wave Generator is not assigned.");
             }
 
-            if (lightningCannon == null)
+            if (specialAttackController == null)
             {
-                throw new InvalidOperationException("Lightning Cannon is not assigned.");
+                throw new InvalidOperationException("Special Attack Controller is not assigned.");
             }
 
             if (playerTransform == null)

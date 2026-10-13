@@ -6,7 +6,7 @@ using SphSwe.Validation;
 namespace SphSwe.Gameplay
 {
     [DisallowMultipleComponent]
-    public sealed class LightningCannon : MonoBehaviour
+    public sealed class LightningCannon : SpecialAttack
     {
         [Header("References")]
 
@@ -15,17 +15,6 @@ namespace SphSwe.Gameplay
         
         [SerializeField, Required]
         private StunStatus stunStatus;
-
-        [Header("Cooldown")]
-
-        [SerializeField, Min(0f)]
-        private float cooldownDuration = 5f;
-
-        private float remainingCooldownDuration;
-
-        public bool IsReady => remainingCooldownDuration <= 0f;
-
-        public float RemainingCooldownDuration => remainingCooldownDuration;
         
         private const int MaximumHitColliderCount = 16;
 
@@ -44,22 +33,21 @@ namespace SphSwe.Gameplay
         private LayerMask hitDetectionLayerMask = ~0;
 
         private readonly Collider[] hitColliders = new Collider[MaximumHitColliderCount];
-
+        
         /// <summary>
-        /// クールタイムが完了している場合に雷砲を発射する。
-        /// 発射に成功した場合はtrueを返す。
+        /// 硬直していない場合に雷砲を発射する。
+        /// 共通クールタイムの判定と開始は
+        /// SpecialAttackControllerが担当する。
         /// </summary>
-        public bool TryFireLightningCannon()
+        public override bool TryUse()
         {
-            if (stunStatus.IsStunned || !IsReady)
+            if (stunStatus.IsStunned)
             {
                 return false;
             }
 
             lightningBeamEffect.ShowLightningBeam();
             ApplyStunToHitCharacters();
-
-            remainingCooldownDuration = cooldownDuration;
 
             return true;
         }
@@ -116,20 +104,6 @@ namespace SphSwe.Gameplay
         private void Awake()
         {
             ValidateReferences();
-
-            // ゲーム開始直後には必殺技を発射できない仕様のため、
-            // 初回クールタイムも最大値から開始する。
-            remainingCooldownDuration = cooldownDuration;
-        }
-
-        private void Update()
-        {
-            if (IsReady)
-            {
-                return;
-            }
-
-            remainingCooldownDuration = Mathf.Max(0f, remainingCooldownDuration - Time.deltaTime);
         }
 
         private void ValidateReferences()
@@ -151,7 +125,6 @@ namespace SphSwe.Gameplay
 
         private void OnValidate()
         {
-            cooldownDuration = Mathf.Max(0f, cooldownDuration);
             hitBoxWidth = Mathf.Max(0.01f, hitBoxWidth);
             hitBoxHeight = Mathf.Max(0.01f, hitBoxHeight);
             stunDuration = Mathf.Max(0f, stunDuration);

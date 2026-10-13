@@ -319,3 +319,19 @@ Unity EditorのPlay検証では、Enemyの横移動、`-Z`方向への波生成�
 水面解像度128×128で十分なFPSを確認したため、この値を維持する。近傍粒子が見つからない頂点では水深0による局所的なくぼみが見える場合があり、現時点では既知の描画課題として許容する。詳細は`Documentation/19-GPU-Fluid-Surface-Mesh.md`を参照する。
 
 Enemy AIは、目的球がPlayer側にある場合も低頻度で攻撃波を発生させるよう更新した。雷砲はPlayer位置を毎フレーム追跡せず、予告時間の開始時に照準位置を固定する。命中を狙う確率と明確に外す照準オフセットを持たせ、回避可能性を確保した。難易度パラメータは引き続きInspectorで調整する。
+
+## 最新状況（2026年10月14日・必殺技スロット実装後）
+
+Playerが複数の必殺技スロットを循環選択できる仕組みを実装した。
+
+- `SpecialAttack`を必殺技の共通基底クラスとする。
+- `SpecialAttackController`でスロット選択と全必殺技共通のクールタイムを管理する。
+- 初期構成は`LIGHTNING CANNON`、`EMPTY`、`EMPTY`の3スロットとする。
+- マウスホイールまたは`W` / `S`で選択し、`Space`で使用する。
+- 空スロットおよび硬直による発動失敗ではクールタイムを消費しない。
+- Player UIは現在の必殺技と前後のスロットを3行で表示する。
+- Playerのクールタイム表示と選択表示は`Assets/SphSwe/UI/Prefab/PlayerSpecialAttackDisplay.prefab`へまとめた。
+- Enemyは雷砲1枠の`SpecialAttackController`を使用し、Playerと同じ共通APIから必殺技を発動する。
+- `EnemyAiSetupMenu`も`SpecialAttackController`を設定するよう更新した。
+
+詳細は`Documentation/18-Gameplay-And-Special-Attack-Ideas.md`を参照する。
