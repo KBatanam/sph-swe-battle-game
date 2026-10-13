@@ -101,6 +101,11 @@ namespace SphSwe.Editor
 
             serializedSession.ApplyModifiedProperties();
 
+            var debugUi = EnsureComponent<NetworkConnectionDebugUI>(networkManagerObject);
+            var serializedDebugUi = new SerializedObject(debugUi);
+            SetObjectReference(serializedDebugUi, "session", session);
+            serializedDebugUi.ApplyModifiedProperties();
+
             EditorUtility.SetDirty(networkManagerObject);
         }
 
