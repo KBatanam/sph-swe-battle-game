@@ -1,6 +1,7 @@
 using System;
 using kcp2k;
 using Mirror;
+using SphSwe.Gameplay;
 using SphSwe.Networking;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -17,6 +18,7 @@ namespace SphSwe.Editor
         private const string NetworkManagerObjectName = "Network Manager";
         private const string PlayerCubeObjectName = "PlayerCube";
         private const string EnemyCubeObjectName = "EnemyCube";
+        private const string ObjectiveBallObjectName = "ObjectiveBall";
         private const string PlayerCubePrefabPath =
             "Assets/SphSwe/Model/Player/Prefab/PlayerCube.prefab";
 
@@ -25,6 +27,7 @@ namespace SphSwe.Editor
         {
             var playerCube = FindRequiredGameObject(PlayerCubeObjectName);
             var enemyCube = FindRequiredGameObject(EnemyCubeObjectName);
+            var objectiveBall = FindRequiredGameObject(ObjectiveBallObjectName);
 
             var playerPrefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(PlayerCubePrefabPath);
 
@@ -37,6 +40,7 @@ namespace SphSwe.Editor
 
             ConfigurePlayerPrefab(playerPrefabAsset);
             ConfigureNetworkManager(playerPrefabAsset, playerCube, enemyCube);
+            ConfigureObjectiveBall(objectiveBall);
 
             AssetDatabase.SaveAssets();
             EditorSceneManager.MarkSceneDirty(playerCube.scene);
@@ -54,6 +58,8 @@ namespace SphSwe.Editor
                 EnsureComponent<NetworkIdentity>(prefabRoot);
                 EnsureComponent<NetworkBattleCharacter>(prefabRoot);
                 EnsureComponent<NetworkCharacterMovement>(prefabRoot);
+                EnsureComponent<NetworkCharacterStatus>(prefabRoot);
+                EnsureComponent<NetworkCharacterActions>(prefabRoot);
 
                 PrefabUtility.SaveAsPrefabAsset(prefabRoot, prefabPath);
             }
@@ -107,6 +113,14 @@ namespace SphSwe.Editor
             serializedDebugUi.ApplyModifiedProperties();
 
             EditorUtility.SetDirty(networkManagerObject);
+        }
+
+        private static void ConfigureObjectiveBall(GameObject objectiveBallObject)
+        {
+            EnsureComponent<NetworkIdentity>(objectiveBallObject);
+            EnsureComponent<NetworkObjectiveBall>(objectiveBallObject);
+
+            EditorUtility.SetDirty(objectiveBallObject);
         }
 
         private static T EnsureComponent<T>(GameObject gameObject) where T : Component
