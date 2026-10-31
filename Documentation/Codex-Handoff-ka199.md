@@ -25,7 +25,7 @@
 1. GitおよびGit LFSをインストールする。
 2. GitHubからリポジトリをcloneする。
 3. Unity Hubへ既存プロジェクトとして追加する。
-4. Unity 6.3 LTS（6000.3.22f1）でプロジェクトを開く。
+4. Unity 6.3 LTS（6000.3.27f2）でプロジェクトを開く。
 5. Codexでclone先のプロジェクトをワークスペースとして開く。
 6. 新しいCodexタスクへ、この文書と`Documentation/README.md`を最初に読ませる。
 7. 実装内容と文書の記録が一致しているか、現在のGit差分とUnityのConsoleを確認する。
@@ -43,7 +43,7 @@ Documentation/Codex-Handoff-ka199.mdとDocumentation/README.mdを読み、
 ## 開発環境
 
 - プロジェクト名：`sph-swe-battle-game`
-- Unity：Unity 6.3 LTS（6000.3.22f1）
+- Unity：Unity 6.3 LTS（6000.3.27f2）
 - Render Pipeline：Universal Render Pipeline
 - テンプレート：URP Empty Template（SRP）
 - IDE：JetBrains Rider

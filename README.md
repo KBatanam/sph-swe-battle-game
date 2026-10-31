@@ -18,7 +18,7 @@ SPH-SWE（Smoothed Particle Hydrodynamicsによる浅水方程式）で計算し
 
 ## 開発環境
 
-- Unity 6.3 LTS（6000.3.22f1）
+- Unity 6.3 LTS（6000.3.27f2）
 - Universal Render Pipeline 17.3.0
 - Input System 1.20.0
 - TextMesh Pro
@@ -74,7 +74,7 @@ Codexは開発支援に使用しているものであり、このゲームをclo
 - Git
 - Git LFS
 - Unity Hub
-- Unity 6.3 LTS（6000.3.22f1）
+- Unity 6.3 LTS（6000.3.27f2）
 
 ### 2. Clone
 
@@ -94,7 +94,7 @@ git lfs pull
 ### 3. Unityで開く
 
 1. Unity Hubの`Add`からcloneしたプロジェクトフォルダを追加します。
-2. Unity 6.3 LTS（6000.3.22f1）で開きます。
+2. Unity 6.3 LTS（6000.3.27f2）で開きます。
 3. Packageの解決とAssetのImportが完了するまで待ちます。
 4. `Assets/SphSwe/Scenes/sph_swe.unity`を開きます。
 5. ConsoleにErrorがないことを確認してPlayします。
@@ -106,7 +106,7 @@ Package Managerの依存関係は`Packages/manifest.json`と`Packages/packages-l
 別PCで同じ開発環境を再現する際は、次を確認してください。
 
 ```text
-Unity Editor: 6000.3.22f1
+Unity Editor: 6000.3.27f2
 Render Pipeline: Universal Render Pipeline 17.3.0
 Main Scene: Assets/SphSwe/Scenes/sph_swe.unity
 Git LFS: インストール後にgit lfs pullを実行

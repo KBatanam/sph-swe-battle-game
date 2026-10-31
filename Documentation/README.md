@@ -6,7 +6,7 @@
 
 ## 開発環境
 
-- Unity 6.3 LTS（6000.3.22f1）
+- Unity 6.3 LTS（6000.3.27f2）
 - Universal Render Pipeline 17.3.0
 - URP Empty Template
 - CPU版を基準実装として作成後、Compute Shaderへ移植する
